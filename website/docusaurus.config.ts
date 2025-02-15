@@ -81,6 +81,11 @@ const config: Config = {
           href: "https://github.com/UraniumCorporation/maiar-ai",
           label: "GitHub",
           position: "right"
+        },
+        {
+          href: "https://maiar.dev/maiar.pdf",
+          label: "Whitepaper",
+          position: "right"
         }
       ]
     },
@@ -97,6 +102,10 @@ const config: Config = {
             {
               label: "API",
               to: "/api"
+            },
+            {
+              label: "Whitepaper",
+              href: "https://maiar.dev/maiar.pdf"
             }
           ]
         },
