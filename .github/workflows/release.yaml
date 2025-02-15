@@ -128,7 +128,7 @@ jobs:
 
           echo "Publishing packages to NPM..."
           echo "NPM Package version $LATEST_TAG"
-          pnpm lerna publish from-git --yes --no-private --ignore-scripts --dist-tag latest --loglevel verbose
+          pnpm lerna publish from-git --yes --no-private --dist-tag latest --loglevel verbose
 
   generate-docs:
     name: 📚 Generate API Docs
