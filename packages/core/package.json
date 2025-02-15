@@ -43,7 +43,8 @@
     "lint:emit": "tsc --project tsconfig.json --noEmit false",
     "build": "tsup --config ../../tsup.config.base.ts",
     "clean": "rm -rf dist",
-    "echo": "echo \"nothing\""
+    "echo": "echo \"nothing\"",
+    "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
     "openai": "4.82.0",

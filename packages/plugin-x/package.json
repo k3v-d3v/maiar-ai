@@ -43,7 +43,8 @@
     "lint": "tsc --project tsconfig.json",
     "lint:emit": "tsc --project tsconfig.json --noEmit false",
     "build": "tsup --config ../../tsup.config.base.ts",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
     "@maiar-ai/core": "workspace:*",
