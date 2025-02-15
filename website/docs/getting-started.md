@@ -279,7 +279,7 @@ const runtime = createRuntime({
 
 - Explore the [API Reference](/api) to learn about available methods and configurations
 - Check out the Plugins Guide to learn how to extend your agent's capabilities
-- Join our Discord to get help and share your experiences
+- Join our [Discord](https://discord.gg/maiar) to get help and share your experiences
 
 ## Troubleshooting
 

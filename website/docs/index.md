@@ -9,5 +9,5 @@ Maiar is a powerful framework for building AI agents that can interact with vari
 ## Need Help?
 
 - Check out our [Getting Started](docs/getting-started) guide
-- Join our community on Discord
+- Join our community on [Discord](https://discord.gg/maiar)
 - Report issues on [GitHub](https://github.com/maiar-ai/maiar/issues)

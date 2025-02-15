@@ -114,7 +114,7 @@ Be respectful, constructive, and inclusive. Follow the [Code of Conduct](https:/
 
 ## Need Help?
 
-- Join [Discord](https://discord.gg/8YFx5RwvgM)
+- Join [Discord](https://discord.gg/maiar)
 - Create [GitHub issues](https://github.com/UraniumCorporation/maiar-ai/issues)
 
 Talk to us in discussions or open an issue. Happy coding!
