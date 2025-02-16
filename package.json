@@ -24,18 +24,16 @@
   "type": "module",
   "scripts": {
     "prepare": "husky",
-    "dev": "turbo run dev --filter=./packages/*",
-    "build": "turbo run build",
-    "build:packages": "turbo run build --filter=./packages/*",
-    "build:website": "turbo run build --filter=./website",
-    "build:starter": "turbo run build --filter=./maiar-starter",
+    "build": "turbo run build --filter=./packages/*",
+    "build:website": "turbo run build:website --filter=./website",
+    "build:starter": "turbo run build:starter --filter=./maiar-starter",
     "commit": "cz",
     "commitlint": "commitlint --edit",
     "lint": "turbo run lint",
     "eslint": "eslint . --max-warnings 0",
     "prettier": "prettier --write .",
     "whitepaper": "mkdir -p tmp_latex && pdflatex -output-directory=tmp_latex -interaction=nonstopmode -halt-on-error maiar.tex > /dev/null 2>&1 && pdflatex -output-directory=tmp_latex -interaction=nonstopmode -halt-on-error maiar.tex > /dev/null 2>&1 && mv tmp_latex/maiar.pdf . && rm -rf tmp_latex",
-    "prepublishOnly": "pnpm build:packages"
+    "prepublishOnly": "pnpm build"
   },
   "devDependencies": {
     "@commitlint/cli": "19.6.1",

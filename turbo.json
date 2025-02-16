@@ -1,22 +1,17 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalEnv": ["OPENAI_API_KEY", "LOG_LEVEL"],
-  "globalDependencies": [".env"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
     },
-    "dev": {
-      "cache": false,
-      "persistent": true
+    "build:website": {
+      "outputs": ["build/**"]
     },
-    "test": {
+    "build:starter": {
       "dependsOn": ["^build"],
-      "outputs": []
+      "outputs": ["dist/**"]
     },
-    "lint": {
-      "outputs": []
-    }
+    "lint": {}
   }
 }

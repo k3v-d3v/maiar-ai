@@ -4,7 +4,7 @@
   "private": true,
   "main": "./dist/index.js",
   "scripts": {
-    "build": "tsc --project tsconfig.json",
+    "build:starter": "tsc --project tsconfig.json",
     "start": "node dist/index.js"
   },
   "dependencies": {
@@ -12,13 +12,8 @@
     "@maiar-ai/memory-sqlite": "workspace:*",
     "@maiar-ai/model-openai": "workspace:*",
     "@maiar-ai/plugin-express": "workspace:*",
-    "@maiar-ai/plugin-image": "workspace:*",
-    "@maiar-ai/plugin-telegram": "workspace:*",
-    "@maiar-ai/plugin-terminal": "workspace:*",
     "@maiar-ai/plugin-text": "workspace:*",
     "@maiar-ai/plugin-time": "workspace:*",
-    "@maiar-ai/plugin-websocket": "workspace:*",
-    "@maiar-ai/plugin-x": "workspace:*",
     "@maiar-ai/plugin-character": "workspace:*",
     "@maiar-ai/plugin-search": "workspace:*",
     "dotenv": "16.4.7"
