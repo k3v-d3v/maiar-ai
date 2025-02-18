@@ -187,11 +187,10 @@ jobs:
           git config --global user.email "maiar-intern@users.noreply.github.com"
 
       - name: 🔎📦 Commit Changes on API Doc Changes
-        continue-on-error: true
         run: |
           if git diff --quiet website/api; then
-            echo "No API documentation changes detected. Failing the job."
-            exit 1
+            echo "No API documentation changes detected. Skipping commit..."
+            exit 0
           fi
 
           echo "API documentation has changed from relevant code changes in packages/**/src/*.ts files"
