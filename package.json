@@ -34,7 +34,14 @@
     "eslint": "eslint . --max-warnings 0",
     "prettier": "prettier --write .",
     "whitepaper": "mkdir -p tmp_latex && pdflatex -output-directory=tmp_latex -interaction=nonstopmode -halt-on-error maiar.tex > /dev/null 2>&1 && pdflatex -output-directory=tmp_latex -interaction=nonstopmode -halt-on-error maiar.tex > /dev/null 2>&1 && mv tmp_latex/maiar.pdf . && rm -rf tmp_latex",
-    "prepublishOnly": "pnpm build"
+    "prepublishOnly": "pnpm build",
+    "docker:build": "docker build -t maiar-starter -t maiar-starter:latest -f Dockerfile .",
+    "docker:run": "docker container run -d --name maiar-starter --env-file maiar-starter/.env -p 3000:3000 maiar-starter:latest",
+    "docker:clean": "docker container stop maiar-starter 2>/dev/null || true && docker container rm maiar-starter 2>/dev/null || true && docker image rm maiar-starter:latest 2>/dev/null || true && docker image prune -f && echo '✨ Cleanup complete'",
+    "docker:logs": "docker logs maiar-starter",
+    "docker:up": "docker compose up --build -d",
+    "docker:down": "docker compose down",
+    "docker:clogs": "docker compose logs -f"
   },
   "devDependencies": {
     "@commitlint/cli": "19.6.1",
