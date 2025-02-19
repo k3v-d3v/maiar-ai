@@ -38,7 +38,8 @@ const runtime = createRuntime({
   }),
   plugins: [
     new PluginExpress({
-      port: 3001,
+      host: "0.0.0.0",
+      port: 3000,
       router: appRouter
     }),
     new PluginTextGeneration(),
