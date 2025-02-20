@@ -448,6 +448,7 @@ export default function Home(): JSX.Element {
             <Link href="https://github.com/UraniumCorporation/maiar-ai">
               github
             </Link>
+            <Link to="/plugins">plugins</Link>
           </div>
         </div>
       </div>
