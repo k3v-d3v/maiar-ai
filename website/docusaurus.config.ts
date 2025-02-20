@@ -78,6 +78,11 @@ const config: Config = {
           label: "API"
         },
         {
+          to: "/plugins",
+          position: "left",
+          label: "Plugins"
+        },
+        {
           href: "https://github.com/UraniumCorporation/maiar-ai",
           label: "GitHub",
           position: "right"
