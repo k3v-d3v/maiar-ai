@@ -220,6 +220,8 @@ export default function Home(): JSX.Element {
               overflow: hidden;
               background: #000;
               color: #88ff88;
+              word-break: break-word;
+              overflow-wrap: break-word;
             }
             .homepage {
               padding: 0 !important;
@@ -346,16 +348,21 @@ export default function Home(): JSX.Element {
               margin-top: 10px;
               text-align: center;
               z-index: 6;
+              display: flex;
+              flex-wrap: wrap;
+              justify-content: center;
+              gap: 15px;
             }
             .links a {
               color: #88ff88;
               text-decoration: none;
-              margin: 0 15px;
               font-size: 1rem;
               transition: color 0.3s;
+              white-space: nowrap;
+              padding: 5px;
             }
             .links a:hover {
-              color: #aaffaa;
+              color: #c2ff66;
             }
             .grain {
               position: fixed;

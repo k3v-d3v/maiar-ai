@@ -241,6 +241,16 @@ export default function Plugins(): React.JSX.Element {
             onChange={(e) => setSearchQuery(e.target.value)}
             className={styles.searchInput}
           />
+          <div className={styles.registerPluginContainer}>
+            <a
+              href="https://github.com/UraniumCorporation/plugin-registry"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={styles.registerPluginLink}
+            >
+              🔌 Register your plugin
+            </a>
+          </div>
           {error && <div className={styles.errorMessage}>{error}</div>}
         </div>
 
