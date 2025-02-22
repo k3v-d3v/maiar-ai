@@ -50,6 +50,14 @@ const config: Config = {
   ],
 
   themeConfig: {
+    announcementBar: {
+      id: "hackathon_2025",
+      content:
+        '🚀 Join us for the Maiar Hackathon from Feb 21 6:00 AM UTC - Feb 25 5:59AM UTC 2025! Prize Pool is currently at 57 SOL! <a href="https://x.com/maiar_ai/status/1892662148146282962" target="_blank">Learn more</a>',
+      backgroundColor: "#3D4F27",
+      textColor: "#D1FF8C",
+      isCloseable: false
+    },
     colorMode: {
       defaultMode: "dark",
       disableSwitch: true,
