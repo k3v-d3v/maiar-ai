@@ -1,0 +1,28 @@
+name: 🎉 Thank Contributor
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  pay-contributor:
+    name: 🎉 Thank Contributor
+    # Only run this job when the PR is merged
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🛒 Checkout
+        uses: actions/checkout@v4
+
+      - name: 📦 Install dependencies
+        run: |
+          npm install --save-exact @actions/github@6.0.0
+
+      - name: 🎉 Thank Contributor
+        run: node .github/scripts/thank-you/thank-contributor.js
+        env:
+          # Standard Environment Variables
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          # Step Inputs
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
