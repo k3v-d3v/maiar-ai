@@ -1,0 +1,129 @@
+name: 💰 Bounty Payment
+on:
+  pull_request:
+    types: [closed]
+
+env:
+  SOLANA_NETWORK: "mainnet-beta" # Change to "mainnet-beta" for production
+  TOKEN_ADDRESS: "G5e2XonmccmdKc98g3eNQe5oBYGw9m8xdMUvVtcZpump" # $MAIAR token address
+
+jobs:
+  pay-contributor:
+    name: 💰 Pay PR Contributor
+    # Only run this job when the PR is merged
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🛒 Checkout
+        uses: actions/checkout@v4
+
+      - name: 📦 Install dependencies
+        run: |
+          npm install --save-exact @actions/github@6.0.0
+
+      # Step Outputs:
+      # - issues (string) - "1, 2, 3" (csv) or ""
+      - name: 🔍 Get issue numbers that the PR closes from CODEOWNERS comments
+        id: extract-issues
+        run: node .github/scripts/bounty/extract-issues.js
+        env:
+          # Standard Environment Variables
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+
+      # Step Outputs:
+      # - bounty_issues_to_pay (string) - "1, 2, 3" (csv) or "none"
+      - name: 🔍 Filter bounty issues that have not been paid
+        id: filter-bounty-issues
+        if: steps.extract-issues.outputs.issues != 'none'
+        run: node .github/scripts/bounty/filter-bounty-issues.js
+        env:
+          # Standard Environment Variables
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          # Step Inputs
+          ISSUES_CLOSED: ${{ steps.extract-issues.outputs.issues_closed }}
+
+      # Step Outputs:
+      # - total_bounty (number) - "1000"
+      # - issues_to_bounty_csv (comma separated list of bounty details) - "#1:100 $MAIAR, #2: 200 $MAIAR"
+      - name: 💵 Calculate Bounty Amount
+        id: calculate-bounty
+        if: steps.filter-bounty-issues.outputs.bounty_issues_to_pay != 'none'
+        run: node .github/scripts/bounty/calculate-bounty.js
+        env:
+          # Standard Environment Variables
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          # Step Inputs
+          BOUNTY_ISSUES_TO_PAY: ${{ steps.filter-bounty-issues.outputs.bounty_issues_to_pay }}
+
+      # Step Outputs:
+      # - wallet (string) - "0x1234567890123456789012345678901234567890"
+      - name: 🪙 Extract Wallet Address
+        id: extract-wallet
+        if: steps.filter-bounty-issues.outputs.bounty_issues_to_pay != 'none'
+        run: node .github/scripts/bounty/extract-wallet.js
+        env:
+          # Standard Environment Variables
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          # Step Inputs
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+
+      # Step Outputs:
+      # - success (boolean) - "true" or "false" (true if the payout was successful)
+      # - error (string) - "Error: Insufficient balance" or "" (if the payout failed)
+      # - transaction (string) - "1234567890123456789012345678901234567890" or "" (if the payout failed)
+      - name: 💳 Pay Contributor
+        id: payout
+        if: steps.filter-bounty-issues.outputs.bounty_issues_to_pay != 'none'
+        uses: UraniumCorporation/solana-payout-action@v0.0.1
+        continue-on-error: true
+        with:
+          recipient-wallet-address: ${{ steps.extract-wallet.outputs.wallet }}
+          amount: ${{ steps.calculate-bounty.outputs.total_bounty }}
+          token: ${{ env.TOKEN_ADDRESS }}
+          network: ${{ env.SOLANA_NETWORK }}
+        env:
+          SENDER_WALLET_SECRET: ${{ secrets.SENDER_WALLET_SECRET }}
+
+      - name: 📝 Log Outputs
+        if: steps.filter-bounty-issues.outputs.bounty_issues_to_pay != 'none'
+        run: |
+          echo 'success="${{ steps.payout.outputs.success }}"'
+          echo 'error="${{ steps.payout.outputs.error }}"'
+          echo 'transaction="${{ steps.payout.outputs.transaction }}"'
+
+      - name: 🎉 Thank Contributor w/ Transaction Signature
+        if: steps.filter-bounty-issues.outputs.bounty_issues_to_pay != 'none'
+        run: node .github/scripts/bounty/thank-contributor-tx.js
+        env:
+          # Standard Environment Variables
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          # Step Inputs
+          SOLANA_NETWORK: ${{ env.SOLANA_NETWORK }}
+          SUCCESS: ${{ steps.payout.outputs.success }}
+          ERROR: ${{ steps.payout.outputs.error }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          RECIPIENT_WALLET: ${{ steps.extract-wallet.outputs.wallet }}
+          TRANSACTION_SIGNATURE: ${{ steps.payout.outputs.transaction }}
+          TOTAL_BOUNTY: ${{ steps.calculate-bounty.outputs.total_bounty }}
+          ISSUES_TO_BOUNTY_CSV: ${{ steps.calculate-bounty.outputs.issues_to_bounty_csv }}
+
+      - name: 🏷️ Label Bounty Issues as Paid
+        if: steps.filter-bounty-issues.outputs.bounty_issues_to_pay != 'none' && steps.payout.outputs.success == 'true'
+        run: node .github/scripts/bounty/label-issues-paid.js
+        env:
+          # Standard Environment Variables
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          # Step Inputs
+          BOUNTY_ISSUES_TO_PAY: ${{ steps.filter-bounty-issues.outputs.bounty_issues_to_pay }}
