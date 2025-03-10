@@ -42,6 +42,8 @@ const commitlintConfig: UserConfig = {
         "ci", // Continuous integration
         "cd", // Continuous deployment
         "release", // Release related changes
+        "bounty", // Bounty CI related changes
+        "thank-you", // Thank you CI related changes
         "other", // Other changes
         "core", // core package
         "memory-filesystem", // memory-filesystem plugin
