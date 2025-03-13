@@ -1,6 +1,6 @@
 name: 💰 Bounty Payment
 on:
-  pull_request:
+  pull_request_target:
     types: [closed]
 
 env:
