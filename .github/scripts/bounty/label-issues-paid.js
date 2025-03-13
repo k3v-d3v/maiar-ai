@@ -1,4 +1,4 @@
-const { GithubService, BOUNTY_PAID_LABEL } = require("../lib/github");
+import { GithubService, BOUNTY_PAID_LABEL } from "../lib/github.js";
 
 /**
  * Main function that labels bounty issues on Github with the `bounty paid` label

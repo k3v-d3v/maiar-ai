@@ -1,4 +1,4 @@
-const { GithubService } = require("../lib/github");
+import { GithubService } from "../lib/github.js";
 
 /**
  * Main function that makes a comment on the PR with the bounty payment details

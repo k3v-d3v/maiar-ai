@@ -1,15 +1,15 @@
-const { readFileSync } = require("fs");
-const { getOctokit } = require("@actions/github");
+import { readFileSync } from "fs";
+import { getOctokit } from "@actions/github";
 
 // Constants
-const MAIAR_SYMBOL = "$MAIAR";
-const BOUNTY_LABEL = "bounty";
-const BOUNTY_PAID_LABEL = "bounty paid";
+export const MAIAR_SYMBOL = "$MAIAR";
+export const BOUNTY_LABEL = "bounty";
+export const BOUNTY_PAID_LABEL = "bounty paid";
 
 /**
  * Service class to interact with GitHub API
  */
-class GithubService {
+export class GithubService {
   /**
    * Initialize the GitHub service
    * @param {string} githubToken - GitHub API token
@@ -134,10 +134,3 @@ class GithubService {
     return `<sub>This comment was created by GitHub Actions workflow run [#${runId}](https://github.com/${this.owner}/${this.repoName}/actions/runs/${runId}) on ${runDate}</sub>`;
   }
 }
-
-module.exports = {
-  GithubService,
-  BOUNTY_LABEL,
-  BOUNTY_PAID_LABEL,
-  MAIAR_SYMBOL
-};

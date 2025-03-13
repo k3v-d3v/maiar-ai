@@ -1,4 +1,4 @@
-const { GithubService } = require("../lib/github");
+import { GithubService } from "../lib/github.js";
 
 /**
  * Main function that thanks the contributor for their contribution

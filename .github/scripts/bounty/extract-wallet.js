@@ -1,5 +1,5 @@
-const { appendFileSync } = require("fs");
-const { GithubService } = require("../lib/github");
+import { appendFileSync } from "fs";
+import { GithubService } from "../lib/github.js";
 
 /**
  * Main function that calculates the bounty amount for a PR

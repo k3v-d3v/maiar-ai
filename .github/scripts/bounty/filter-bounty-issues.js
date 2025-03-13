@@ -1,5 +1,5 @@
-const { appendFileSync } = require("fs");
-const { GithubService, BOUNTY_PAID_LABEL } = require("../lib/github");
+import { appendFileSync } from "fs";
+import { GithubService, BOUNTY_PAID_LABEL } from "../lib/github.js";
 
 /**
  * Main function that filters bounty issues that have not been paid

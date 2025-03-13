@@ -1,5 +1,5 @@
-const { appendFileSync } = require("fs");
-const { GithubService, MAIAR_SYMBOL } = require("../lib/github");
+import { appendFileSync } from "fs";
+import { GithubService, MAIAR_SYMBOL } from "../lib/github.js";
 
 /**
  * Main function that calculates the bounty amount for a PR
