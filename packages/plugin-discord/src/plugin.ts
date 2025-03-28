@@ -10,7 +10,7 @@ import {
 
 import {
   AgentContext,
-  MonitorService,
+  MonitorManager,
   Plugin,
   PluginResult,
   Runtime,
@@ -70,7 +70,7 @@ export class DiscordPlugin extends Plugin {
     // log the oauth invite url after 5 seconds
     // we delay this to ensure monitor is connected and the event is captured
     setTimeout(() => {
-      MonitorService.publishEvent({
+      MonitorManager.publishEvent({
         type: "discord.oauth.invite",
         message: "OAuth invite URL",
         metadata: {
@@ -99,7 +99,7 @@ export class DiscordPlugin extends Plugin {
             ? await this.client.guilds.fetch(this.config.guildId)
             : this.client.guilds.cache.first();
 
-          MonitorService.publishEvent({
+          MonitorManager.publishEvent({
             type: "discord.guild.fetch",
             message: "Fetched guild",
             metadata: {
@@ -126,7 +126,7 @@ export class DiscordPlugin extends Plugin {
             };
           }
 
-          MonitorService.publishEvent({
+          MonitorManager.publishEvent({
             type: "discord.message.sending",
             message: "Text channels fetched",
             metadata: {
@@ -155,7 +155,7 @@ export class DiscordPlugin extends Plugin {
           ) as ChannelInfo[];
 
           // Log channel info
-          MonitorService.publishEvent({
+          MonitorManager.publishEvent({
             type: "discord.channel.info",
             message: "Channel info fetched",
             metadata: {
@@ -177,7 +177,7 @@ export class DiscordPlugin extends Plugin {
             };
           }
 
-          MonitorService.publishEvent({
+          MonitorManager.publishEvent({
             type: "discord.channel.selection",
             message: "Channel selected",
             metadata: {
@@ -210,7 +210,7 @@ export class DiscordPlugin extends Plugin {
             }
           };
         } catch (error) {
-          MonitorService.publishEvent({
+          MonitorManager.publishEvent({
             type: "discord.message.send.error",
             message: "Error sending Discord message",
             logLevel: "error",
@@ -269,7 +269,7 @@ export class DiscordPlugin extends Plugin {
 
           // Release processing lock after reply is sent
           this.isProcessing = false;
-          MonitorService.publishEvent({
+          MonitorManager.publishEvent({
             type: "discord.message.processing.complete",
             message: "Message processing complete - agent unlocked",
             logLevel: "info",
@@ -297,7 +297,7 @@ export class DiscordPlugin extends Plugin {
           this.isProcessing = false;
           this.stopTypingIndicator(channelId);
 
-          MonitorService.publishEvent({
+          MonitorManager.publishEvent({
             type: "discord.message.reply.error",
             message: "Error sending Discord reply",
             logLevel: "error",
@@ -319,7 +319,7 @@ export class DiscordPlugin extends Plugin {
 
     try {
       await this.client.login(this.config.token);
-      MonitorService.publishEvent({
+      MonitorManager.publishEvent({
         type: "discord.client.connected",
         message: "Discord client connected successfully",
         logLevel: "info"
@@ -330,7 +330,7 @@ export class DiscordPlugin extends Plugin {
         this.client.on(Events.MessageCreate, this.handleMessage.bind(this));
       }
     } catch (error) {
-      MonitorService.publishEvent({
+      MonitorManager.publishEvent({
         type: "discord.client.initialization.error",
         message: "Failed to initialize Discord client",
         logLevel: "error",
@@ -350,7 +350,7 @@ export class DiscordPlugin extends Plugin {
     // (Discord's typing indicator lasts 10 seconds, so we refresh before it expires)
     const interval = setInterval(() => {
       channel.sendTyping().catch((error) => {
-        MonitorService.publishEvent({
+        MonitorManager.publishEvent({
           type: "discord.typing.error",
           message: "Error sending typing indicator",
           logLevel: "error",
@@ -367,7 +367,7 @@ export class DiscordPlugin extends Plugin {
 
     // Send initial typing indicator
     channel.sendTyping().catch((error) => {
-      MonitorService.publishEvent({
+      MonitorManager.publishEvent({
         type: "discord.typing.error",
         message: "Error sending typing indicator",
         logLevel: "error",
@@ -413,7 +413,7 @@ export class DiscordPlugin extends Plugin {
           message.id
         );
 
-        MonitorService.publishEvent({
+        MonitorManager.publishEvent({
           type: "discord.message.skipped",
           message: "Skipping message - not intended for agent",
           metadata: {
@@ -432,7 +432,7 @@ export class DiscordPlugin extends Plugin {
         `<@${this.config.clientId}>`
       );
 
-      MonitorService.publishEvent({
+      MonitorManager.publishEvent({
         type: "discord.message.processing",
         message: "Processing message",
         metadata: {
@@ -452,7 +452,7 @@ export class DiscordPlugin extends Plugin {
           10 // Limit to last 10 messages
         );
 
-      MonitorService.publishEvent({
+      MonitorManager.publishEvent({
         type: "discord.message.history",
         message: "Retrieved conversation history",
         metadata: {
@@ -479,7 +479,7 @@ export class DiscordPlugin extends Plugin {
         intentTemplate
       );
 
-      MonitorService.publishEvent({
+      MonitorManager.publishEvent({
         type: "discord.message.intent",
         message: "Intent analysis result",
         metadata: {
@@ -493,7 +493,7 @@ export class DiscordPlugin extends Plugin {
         // Set processing lock
         this.isProcessing = true;
 
-        MonitorService.publishEvent({
+        MonitorManager.publishEvent({
           type: "discord.message.processing",
           message: "Message processing started - agent locked",
           metadata: {
@@ -551,7 +551,7 @@ export class DiscordPlugin extends Plugin {
         );
 
         // Add detailed info logging for skipped messages
-        MonitorService.publishEvent({
+        MonitorManager.publishEvent({
           type: "discord.message.skipped",
           message: "Skipping message - not intended for agent",
           metadata: {
@@ -569,7 +569,7 @@ export class DiscordPlugin extends Plugin {
     } catch (error) {
       // Make sure we unlock if there's an error
       this.isProcessing = false;
-      MonitorService.publishEvent({
+      MonitorManager.publishEvent({
         type: "discord.message.intent.error",
         message: "Error processing message intent",
         logLevel: "error",
