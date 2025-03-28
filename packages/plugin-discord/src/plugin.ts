@@ -11,7 +11,7 @@ import {
 import {
   AgentContext,
   MonitorService,
-  PluginBase,
+  Plugin,
   PluginResult,
   Runtime,
   UserInputContext
@@ -32,7 +32,7 @@ import {
   MessageIntentSchema
 } from "./types";
 
-export class PluginDiscord extends PluginBase {
+export class DiscordPlugin extends Plugin {
   private client: Client;
   private isProcessing: boolean = false; // Our processing lock
   private typingIntervals: Map<string, NodeJS.Timeout> = new Map();
