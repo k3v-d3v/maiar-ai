@@ -41,7 +41,7 @@ import { Plugin } from "./providers/plugin";
 const REQUIRED_CAPABILITIES = ["text-generation"];
 
 export async function getObject<T extends z.ZodType>(
-  service: ModelManager,
+  modelManager: ModelManager,
   schema: T,
   prompt: string,
   config?: GetObjectConfig
@@ -65,7 +65,7 @@ export async function getObject<T extends z.ZodType>(
               lastResponse: lastResponse!,
               error: lastError!.message
             });
-      const response = await service.executeCapability(
+      const response = await modelManager.executeCapability(
         "text-generation",
         fullPrompt,
         config
@@ -128,9 +128,9 @@ export async function getObject<T extends z.ZodType>(
 export class Runtime {
   public readonly operations; // Operations that can be used by plugins
 
-  private modelService: ModelManager;
-  private memoryService: MemoryManager;
-  private monitorService: MonitorManager;
+  private modelManager: ModelManager;
+  private memoryManager: MemoryManager;
+  private monitorManager: MonitorManager;
   private pluginRegistry: PluginRegistry;
 
   private isRunning: boolean;
@@ -139,9 +139,9 @@ export class Runtime {
   private currentContext: AgentContext | undefined;
 
   private constructor(
-    modelService: ModelManager,
-    memoryService: MemoryManager,
-    monitorService: MonitorManager,
+    modelManager: ModelManager,
+    memoryManager: MemoryManager,
+    monitorManager: MonitorManager,
     pluginRegistry: PluginRegistry
   ) {
     this.operations = {
@@ -149,14 +149,14 @@ export class Runtime {
         schema: T,
         prompt: string,
         config?: OperationConfig
-      ) => getObject(this.modelService, schema, prompt, config),
+      ) => getObject(this.modelManager, schema, prompt, config),
       executeCapability: <K extends keyof ICapabilities>(
         capabilityId: K,
         input: ICapabilities[K]["input"],
         config?: OperationConfig,
         modelId?: string
       ) =>
-        this.modelService.executeCapability(
+        this.modelManager.executeCapability(
           capabilityId,
           input,
           config,
@@ -164,9 +164,9 @@ export class Runtime {
         )
     };
 
-    this.modelService = modelService;
-    this.memoryService = memoryService;
-    this.monitorService = monitorService;
+    this.modelManager = modelManager;
+    this.memoryManager = memoryManager;
+    this.monitorManager = monitorManager;
     this.pluginRegistry = pluginRegistry;
 
     this.isRunning = false;
@@ -196,7 +196,7 @@ export class Runtime {
         }[] = [];
         if (userInput) {
           conversationHistory =
-            await this.memoryService.getRecentConversationHistory(
+            await this.memoryManager.getRecentConversationHistory(
               userInput.user,
               userInput.pluginId
             );
@@ -230,7 +230,7 @@ export class Runtime {
                 messageId: userInput.id
               }
             });
-            await this.memoryService.storeUserInteraction(
+            await this.memoryManager.storeUserInteraction(
               userInput.user,
               userInput.pluginId,
               userInput.rawMessage,
@@ -328,25 +328,25 @@ export class Runtime {
     plugins: Plugin[],
     capabilityAliases: string[][]
   ): Promise<Runtime> {
-    const modelService = new ModelManager(...modelProviders);
-    const memoryService = new MemoryManager(memoryProvider);
-    const monitorService = MonitorManager.getInstance();
+    const modelManager = new ModelManager(...modelProviders);
+    const memoryManager = new MemoryManager(memoryProvider);
+    const monitorManager = MonitorManager.getInstance();
     const pluginRegistry = new PluginRegistry();
 
-    // Initialize the global monitor service with monitor providers
+    // Initialize the global monitor manager with monitor providers
     try {
       MonitorManager.init(...monitorProviders);
       await MonitorManager.checkHealth();
 
       MonitorManager.publishEvent({
         type: "monitor.healthcheck.passed",
-        message: "Monitor service healthcheck passed"
+        message: "Monitor manager healthcheck passed"
       });
     } catch (err: unknown) {
       const error = err as Error;
       MonitorManager.publishEvent({
         type: "runtime.monitor.healthcheck.failed",
-        message: "Monitor service healthcheck failed",
+        message: "Monitor manager healthcheck failed",
         logLevel: "error",
         metadata: { error }
       });
@@ -393,13 +393,13 @@ export class Runtime {
 
     for (const aliasGroup of capabilityAliases) {
       const canonicalId =
-        aliasGroup.find((id) => modelService.hasCapability(id)) ??
+        aliasGroup.find((id) => modelManager.hasCapability(id)) ??
         (aliasGroup[0] as string);
 
       // Register all other IDs in the group as aliases to the canonical ID
       for (const alias of aliasGroup) {
         if (alias !== canonicalId) {
-          modelService.registerCapabilityAlias(alias, canonicalId);
+          modelManager.registerCapabilityAlias(alias, canonicalId);
         }
       }
     }
@@ -413,25 +413,25 @@ export class Runtime {
     });
 
     return new Runtime(
-      modelService,
-      memoryService,
-      monitorService,
+      modelManager,
+      memoryManager,
+      monitorManager,
       pluginRegistry
     );
   }
 
   /**
-   * Access to the memory service for plugins
+   * Access to the memory manager for plugins
    */
   public get memory(): MemoryManager {
-    return this.memoryService;
+    return this.memoryManager;
   }
 
   /**
-   * Access to the monitor service for plugins
+   * Access to the monitor manager for plugins
    */
   public get monitor(): MonitorManager {
-    return this.monitorService;
+    return this.monitorManager;
   }
 
   /**
@@ -443,7 +443,7 @@ export class Runtime {
 
   private async validatePluginCapabilities(plugin: Plugin): Promise<void> {
     for (const capability of plugin.requiredCapabilities) {
-      if (!this.modelService.hasCapability(capability)) {
+      if (!this.modelManager.hasCapability(capability)) {
         MonitorManager.publishEvent({
           type: "runtime.plugin.capability.missing",
           message: `Plugin ${plugin.id} specified an optional capability ${capability} that is not available`,
@@ -493,7 +493,7 @@ export class Runtime {
 
     // validate required capabilities exist for core runtime operations
     for (const capability of REQUIRED_CAPABILITIES) {
-      if (!this.modelService.hasCapability(capability)) {
+      if (!this.modelManager.hasCapability(capability)) {
         throw new Error(
           `${capability} capability is required for core runtime operations`
         );
@@ -505,7 +505,7 @@ export class Runtime {
       message: "Runtime validated required capabilities",
       logLevel: "info",
       metadata: {
-        capabilities: this.modelService.getAvailableCapabilities()
+        capabilities: this.modelManager.getAvailableCapabilities()
       }
     });
 
@@ -514,7 +514,7 @@ export class Runtime {
       await this.registerPlugin(plugin);
     }
 
-    // Validate all plugins have required capabilities implemented in the model service
+    // Validate all plugins have required capabilities implemented in the model manager
     for (const plugin of this.pluginRegistry.getAllPlugins()) {
       await this.validatePluginCapabilities(plugin);
     }
@@ -605,8 +605,8 @@ export class Runtime {
     initialContext: UserInputContext,
     platformContext?: AgentContext["platformContext"]
   ): Promise<void> {
-    // Get conversationId from memory service
-    const conversationId = await this.memoryService.getOrCreateConversation(
+    // Get conversationId from memory manager
+    const conversationId = await this.memoryManager.getOrCreateConversation(
       initialContext.user,
       initialContext.pluginId
     );
@@ -721,7 +721,7 @@ export class Runtime {
             }
           });
 
-          await this.memoryService.storeAssistantInteraction(
+          await this.memoryManager.storeAssistantInteraction(
             userInput.user,
             userInput.pluginId,
             lastContext.message,
@@ -795,7 +795,7 @@ export class Runtime {
     }[] = [];
     if (userInput) {
       conversationHistory =
-        await this.memoryService.getRecentConversationHistory(
+        await this.memoryManager.getRecentConversationHistory(
           userInput.user,
           platform
         );
@@ -1200,14 +1200,14 @@ export class Runtime {
   }
 
   /**
-   * Execute a capability on the model service
+   * Execute a capability on the model manager
    */
   public async executeCapability<K extends keyof ICapabilities>(
     capabilityId: K,
     input: ICapabilities[K]["input"],
     config?: ModelRequestConfig
   ): Promise<ICapabilities[K]["output"]> {
-    return this.modelService.executeCapability(capabilityId, input, config);
+    return this.modelManager.executeCapability(capabilityId, input, config);
   }
 }
 
