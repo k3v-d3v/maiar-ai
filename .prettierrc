@@ -13,7 +13,6 @@
     "^@maiar-ai/core",
     "^@maiar-ai/model(.*)$",
     "^@maiar-ai/memory(.*)$",
-    "^@maiar-ai/monitor(.*)$",
     "^@maiar-ai/plugin(.*)$",
     "^[./]",
     "^[../]"
