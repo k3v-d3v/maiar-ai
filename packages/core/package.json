@@ -13,6 +13,16 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
     },
+    "./dist/logger": {
+      "types": "./dist/logger.d.ts",
+      "import": "./dist/logger.mjs",
+      "require": "./dist/logger.js"
+    },
+    "./dist/transports": {
+      "types": "./dist/transports.d.ts",
+      "import": "./dist/transports.mjs",
+      "require": "./dist/transports.js"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -41,20 +51,22 @@
     "dev": "tsup --config ../../tsup.config.base.ts --watch",
     "lint": "tsc --project tsconfig.json",
     "lint:emit": "tsc --project tsconfig.json --noEmit false",
-    "build": "tsup --config ../../tsup.config.base.ts",
+    "build": "tsup --config ./tsup.config.ts",
     "clean": "rm -rf dist",
     "echo": "echo \"nothing\"",
     "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
     "openai": "4.82.0",
-    "pino": "9.6.0",
-    "pino-pretty": "13.0.0",
     "rxjs": "7.8.1",
+    "winston": "3.17.0",
+    "winston-transport": "4.9.0",
+    "ws": "8.18.0",
     "zod": "3.24.1"
   },
   "devDependencies": {
     "@types/node": "22.13.1",
+    "@types/ws": "8.5.14",
     "tsup": "8.3.6",
     "typescript": "5.7.3"
   }
