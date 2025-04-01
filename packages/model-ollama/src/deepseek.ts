@@ -1,10 +1,6 @@
 import { z } from "zod";
 
-import {
-  ModelProvider,
-  ModelRequestConfig,
-  MonitorManager
-} from "@maiar-ai/core";
+import { ModelProvider, ModelRequestConfig } from "@maiar-ai/core";
 
 import { verifyBasicHealth } from "./index";
 
@@ -72,25 +68,17 @@ export class DeepseekModelProvider extends ModelProvider {
       // Send a GET request to the tag endpoint and verify if the model exists
       await verifyBasicHealth(this.baseUrl, this.model);
 
-      MonitorManager.publishEvent({
+      this.logger.info(`deepseek model '${this.model}' health check passed`, {
         type: "model.deepseek.health_check.passed",
-        message: `Deepseek model '${this.model}' health check passed`,
-        logLevel: "info",
-        metadata: {
-          model: this.model,
-          baseUrl: this.baseUrl
-        }
+        model: this.model,
+        baseUrl: this.baseUrl
       });
     } catch (error) {
-      MonitorManager.publishEvent({
+      this.logger.error(`deepseek model '${this.model}' health check failed`, {
         type: "model.deepseek.health_check.failed",
-        message: "Deepseek model health check failed",
-        logLevel: "error",
-        metadata: {
-          model: this.model,
-          baseUrl: this.baseUrl,
-          error: error instanceof Error ? error.message : String(error)
-        }
+        model: this.model,
+        baseUrl: this.baseUrl,
+        error: error instanceof Error ? error.message : String(error)
       });
       throw error;
     }
@@ -101,14 +89,10 @@ export class DeepseekModelProvider extends ModelProvider {
     config?: ModelRequestConfig
   ): Promise<string> {
     try {
-      MonitorManager.publishEvent({
+      this.logger.info("sending prompt to deepseek", {
         type: "model.deepseek.generation.start",
-        message: "Sending prompt to Deepseek",
-        logLevel: "info",
-        metadata: {
-          model: this.model,
-          promptLength: prompt.length
-        }
+        model: this.model,
+        promptLength: prompt.length
       });
 
       const response = await fetch(`${this.baseUrl}/api/generate`, {
@@ -134,14 +118,10 @@ export class DeepseekModelProvider extends ModelProvider {
       const data = await response.json();
       const text = data.response;
 
-      MonitorManager.publishEvent({
+      this.logger.info("received response from deepseek", {
         type: "model.deepseek.generation.complete",
-        message: "Received response from Deepseek",
-        logLevel: "info",
-        metadata: {
-          model: this.model,
-          text: text
-        }
+        model: this.model,
+        text: text
       });
 
       // Remove the "Assistant: Let me help you with that." prefix if it exists
@@ -152,14 +132,10 @@ export class DeepseekModelProvider extends ModelProvider {
 
       return cleanedText;
     } catch (error) {
-      MonitorManager.publishEvent({
+      this.logger.error("error getting text from deepseek", {
         type: "model.deepseek.generation.error",
-        message: "Error getting text from Deepseek",
-        logLevel: "error",
-        metadata: {
-          model: this.model,
-          error: error instanceof Error ? error.message : String(error)
-        }
+        model: this.model,
+        error: error instanceof Error ? error.message : String(error)
       });
       throw error;
     }
