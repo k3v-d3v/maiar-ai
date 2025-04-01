@@ -1,5 +1,7 @@
+import { LoggerOptions } from "winston";
 import { z } from "zod";
 
+import logger from "../lib/logger";
 import { MemoryManager } from "./managers/memory";
 import { ModelManager } from "./managers/model";
 import { TEXT_GENERATION_CAPABILITY } from "./managers/model/capability/constants";
@@ -321,14 +323,22 @@ export class Runtime {
     memoryProvider,
     monitorProviders,
     plugins,
-    capabilityAliases
+    capabilityAliases,
+    options
   }: {
     modelProviders: ModelProvider[];
     memoryProvider: MemoryProvider;
     monitorProviders: MonitorProvider[];
     plugins: Plugin[];
     capabilityAliases: string[][];
+    options?: {
+      logger?: LoggerOptions;
+    };
   }): Promise<Runtime> {
+    if (options && options.logger) {
+      logger.configure(options.logger);
+    }
+
     await MonitorManager.init(...monitorProviders);
     await MonitorManager.checkHealth();
     const monitorManager = MonitorManager;
