@@ -1,3 +1,6 @@
+import { Logger } from "winston";
+
+import logger from "../../lib/logger";
 import { BaseContextItem } from "../pipeline/agent";
 import {
   Context,
@@ -13,6 +16,10 @@ import { MonitorManager } from "./monitor";
  */
 export class MemoryManager {
   private provider: MemoryProvider;
+
+  public get logger(): Logger {
+    return logger.child({ scope: "memory.manager" });
+  }
 
   constructor(provider: MemoryProvider) {
     this.provider = provider;

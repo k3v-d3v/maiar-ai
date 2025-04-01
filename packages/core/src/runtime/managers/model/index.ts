@@ -1,3 +1,6 @@
+import { Logger } from "winston";
+
+import logger from "../../../lib/logger";
 import { OperationConfig } from "../../pipeline/operations";
 import { ModelProvider } from "../../providers/model";
 import { MonitorManager } from "../monitor";
@@ -11,6 +14,10 @@ export class ModelManager {
   private models: Map<string, ModelProvider>;
   private capabilityRegistry: CapabilityRegistry;
   private capabilityAliases: Map<string, string>;
+
+  public get logger(): Logger {
+    return logger.child({ scope: "model.manager" });
+  }
 
   constructor(...models: ModelProvider[]) {
     this.models = new Map<string, ModelProvider>();

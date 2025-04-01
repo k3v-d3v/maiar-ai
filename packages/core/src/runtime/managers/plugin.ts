@@ -1,3 +1,6 @@
+import { Logger } from "winston";
+
+import logger from "../../lib/logger";
 import { Plugin } from "../providers/plugin";
 import { MonitorManager } from "./monitor";
 
@@ -6,6 +9,10 @@ import { MonitorManager } from "./monitor";
  */
 export class PluginRegistry {
   private plugins: Map<string, Plugin>;
+
+  public get logger(): Logger {
+    return logger.child({ scope: "plugin.registry" });
+  }
 
   constructor(...plugins: Plugin[]) {
     this.plugins = new Map<string, Plugin>();

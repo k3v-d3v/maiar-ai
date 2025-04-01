@@ -1,9 +1,17 @@
+import { Logger } from "winston";
+
+import logger from "../../../../lib/logger";
+
 /**
  * Registry for model capabilities
  */
 export class CapabilityRegistry {
   private capabilities = new Map<string, Set<string>>();
   private defaultModels = new Map<string, string>();
+
+  public get logger(): Logger {
+    return logger.child({ scope: "model.capability.registry" });
+  }
 
   /**
    * Register a capability for a model
