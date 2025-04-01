@@ -52,7 +52,7 @@ export class ExpressPlugin extends Plugin {
 
         try {
           // Format the response based on the context chain
-          const formattedResponse = await this.runtime.operations.getObject(
+          const formattedResponse = await this.runtime.getObject(
             ExpressResponseSchema,
             generateResponseTemplate(context.contextChain),
             { temperature: 0.2 }
@@ -115,4 +115,6 @@ export class ExpressPlugin extends Plugin {
       }
     });
   }
+
+  public async init(): Promise<void> {}
 }

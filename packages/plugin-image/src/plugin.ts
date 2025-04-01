@@ -17,7 +17,7 @@ export class ImageGenerationPlugin extends Plugin {
       description: "Generate an image based on a text prompt",
       execute: async (context: AgentContext): Promise<PluginResult> => {
         try {
-          const promptResponse = await this.runtime.operations.getObject(
+          const promptResponse = await this.runtime.getObject(
             PromptResponseSchema,
             generatePromptTemplate(context.contextChain),
             { temperature: 0.7 }
@@ -48,4 +48,6 @@ export class ImageGenerationPlugin extends Plugin {
       }
     });
   }
+
+  public async init(): Promise<void> {}
 }

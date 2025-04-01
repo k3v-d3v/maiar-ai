@@ -1,3 +1,6 @@
+import { Logger } from "winston";
+
+import logger from "../../lib/logger";
 import { BaseContextItem } from "../pipeline/agent";
 import {
   Context,
@@ -6,7 +9,6 @@ import {
   MemoryQueryOptions,
   Message
 } from "../providers/memory";
-import { MonitorManager } from "./monitor";
 
 /**
  * MemoryManager is responsbile delegating memory operations to the MemoryProvider
@@ -16,6 +18,42 @@ export class MemoryManager {
 
   constructor(provider: MemoryProvider) {
     this.provider = provider;
+  }
+
+  public get logger(): Logger {
+    return logger.child({ type: "memory.manager" });
+  }
+
+  public async init(): Promise<void> {
+    try {
+      await this.provider.init();
+      this.logger.info(
+        `memory provider "${this.provider.id}" initialized successfully`
+      );
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.logger.error(
+        `memory provider "${this.provider.id}" initialization failed`,
+        { error: error.message }
+      );
+      throw error;
+    }
+  }
+
+  public async checkHealth(): Promise<void> {
+    try {
+      await this.provider.checkHealth();
+      this.logger.info(
+        `memory provider "${this.provider.id}" health check passed`
+      );
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.logger.error(
+        `memory provider "${this.provider.id}" health check failed`,
+        { error: error.message }
+      );
+      throw error;
+    }
   }
 
   /**
@@ -36,7 +74,7 @@ export class MemoryManager {
     messageId?: string
   ): Promise<void> {
     try {
-      MonitorManager.publishEvent({
+      logger.info({
         type: "memory.user.interaction.storing",
         message: "Storing user interaction",
         logLevel: "info",
@@ -45,7 +83,7 @@ export class MemoryManager {
 
       const conversationId = await this.getOrCreateConversation(user, platform);
 
-      MonitorManager.publishEvent({
+      logger.info({
         type: "memory.conversation.retrieved",
         message: "Got conversation ID",
         logLevel: "info",
@@ -55,7 +93,7 @@ export class MemoryManager {
       // Use provided messageId or generate one
       const finalMessageId = messageId || `${platform}-${timestamp}`;
 
-      MonitorManager.publishEvent({
+      logger.info({
         type: "memory.message.id.generated",
         message: "Using message ID",
         logLevel: "info",
@@ -73,14 +111,14 @@ export class MemoryManager {
         conversationId
       );
 
-      MonitorManager.publishEvent({
+      logger.info({
         type: "memory.message.stored",
         message: "Stored user message",
         logLevel: "info",
         metadata: { messageId: finalMessageId, conversationId }
       });
     } catch (error) {
-      MonitorManager.publishEvent({
+      logger.error({
         type: "memory.user.interaction.failed",
         message: "Failed to store user interaction",
         logLevel: "error",
@@ -104,7 +142,7 @@ export class MemoryManager {
     contextChain: BaseContextItem[]
   ): Promise<void> {
     try {
-      MonitorManager.publishEvent({
+      this.logger.info({
         type: "memory.assistant.interaction.storing",
         message: "Storing assistant interaction",
         logLevel: "info",
@@ -113,7 +151,7 @@ export class MemoryManager {
 
       const conversationId = await this.getOrCreateConversation(user, platform);
 
-      MonitorManager.publishEvent({
+      logger.info({
         type: "memory.conversation.retrieved",
         message: "Got conversation ID",
         logLevel: "info",
@@ -127,7 +165,7 @@ export class MemoryManager {
       // Get the user's message ID from the context chain
       const userMessage = contextChain[0];
 
-      MonitorManager.publishEvent({
+      logger.info({
         type: "memory.context.chain.processing",
         message: "Context chain user message",
         logLevel: "info",
@@ -143,7 +181,7 @@ export class MemoryManager {
 
       const userMessageId = userMessage.id;
 
-      MonitorManager.publishEvent({
+      logger.info({
         type: "memory.message.id.extracted",
         message: "Using user message ID from context chain",
         logLevel: "info",
@@ -161,7 +199,7 @@ export class MemoryManager {
         conversationId
       );
 
-      MonitorManager.publishEvent({
+      logger.info({
         type: "memory.context.stored",
         message: "Stored context",
         logLevel: "info",
@@ -181,14 +219,14 @@ export class MemoryManager {
         conversationId
       );
 
-      MonitorManager.publishEvent({
+      logger.info({
         type: "memory.assistant.interaction.completed",
         message: "Successfully stored assistant interaction and context",
         logLevel: "info",
         metadata: { messageId, contextId, conversationId }
       });
     } catch (error) {
-      MonitorManager.publishEvent({
+      logger.error({
         type: "memory.assistant.interaction.failed",
         message: "Failed to store assistant interaction",
         logLevel: "error",
@@ -206,7 +244,7 @@ export class MemoryManager {
     message: Message,
     conversationId: string
   ): Promise<void> {
-    MonitorManager.publishEvent({
+    logger.info({
       type: "memory.manager.store_message.called",
       message: "MemoryManager.storeMessage called",
       logLevel: "info",
@@ -219,7 +257,7 @@ export class MemoryManager {
     context: Context,
     conversationId: string
   ): Promise<void> {
-    MonitorManager.publishEvent({
+    logger.info({
       type: "memory.manager.store_context.called",
       message: "MemoryManager.storeContext called",
       logLevel: "info",
@@ -229,7 +267,7 @@ export class MemoryManager {
   }
 
   public async getMessages(options: MemoryQueryOptions): Promise<Message[]> {
-    MonitorManager.publishEvent({
+    logger.info({
       type: "memory.manager.get_messages.called",
       message: "MemoryManager.getMessages called",
       logLevel: "info",
@@ -239,7 +277,7 @@ export class MemoryManager {
   }
 
   public async getContexts(conversationId: string): Promise<Context[]> {
-    MonitorManager.publishEvent({
+    logger.info({
       type: "memory.manager.get_contexts.called",
       message: "MemoryManager.getContexts called",
       logLevel: "info",
@@ -249,7 +287,7 @@ export class MemoryManager {
   }
 
   public async getConversation(conversationId: string): Promise<Conversation> {
-    MonitorManager.publishEvent({
+    logger.info({
       type: "memory.manager.get_conversation.called",
       message: "MemoryManager.getConversation called",
       logLevel: "info",
@@ -263,7 +301,7 @@ export class MemoryManager {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     metadata?: Record<string, any>;
   }): Promise<string> {
-    MonitorManager.publishEvent({
+    logger.info({
       type: "memory.manager.create_conversation.called",
       message: "MemoryManager.createConversation called",
       logLevel: "info",
@@ -315,7 +353,7 @@ export class MemoryManager {
         timestamp: msg.timestamp
       }));
     } catch (error) {
-      MonitorManager.publishEvent({
+      logger.error({
         type: "memory.conversation.history.failed",
         message: "Failed to get conversation history",
         logLevel: "error",

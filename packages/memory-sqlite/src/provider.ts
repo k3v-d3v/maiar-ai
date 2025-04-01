@@ -40,12 +40,10 @@ export class SQLiteMemoryProvider extends MemoryProvider {
     dbInstance.init(config);
     this.db = dbInstance.getDatabase();
     this.db.exec("PRAGMA foreign_keys = ON;");
-    this.initializeStorage();
-    this.checkHealth();
     this.plugin = new SQLiteMemoryPlugin();
   }
 
-  private checkHealth() {
+  public async checkHealth(): Promise<void> {
     try {
       this.db.prepare("SELECT 1").get();
       this.db.transaction(() => {})();
@@ -55,19 +53,11 @@ export class SQLiteMemoryProvider extends MemoryProvider {
       if (!fkEnabled || !fkEnabled.foreign_keys) {
         throw new Error("Foreign key constraints are not enabled");
       }
-      this.monitor.publishEvent({
-        type: "memory.sqlite.health_check",
-        message: "SQLite health check passed",
-        logLevel: "info"
-      });
-    } catch (error) {
-      this.monitor.publishEvent({
-        type: "memory.sqlite.health_check.failed",
-        message: "SQLite health check failed",
-        logLevel: "error",
-        metadata: {
-          error: error instanceof Error ? error.message : String(error)
-        }
+      this.logger.info("sqlite health check passed");
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.logger.error("sqlite health check failed", {
+        error: error.message
       });
       throw new Error(
         `Failed to initialize SQLite database: ${error instanceof Error ? error.message : String(error)}`
@@ -75,14 +65,8 @@ export class SQLiteMemoryProvider extends MemoryProvider {
     }
   }
 
-  private initializeStorage() {
-    this.createTables().then(() => {
-      this.monitor.publishEvent({
-        type: "memory.sqlite.storage.initialized",
-        message: "Initialized SQLite memory storage",
-        logLevel: "info"
-      });
-    });
+  public async init(): Promise<void> {
+    await this.createTables();
   }
 
   private async createTables(): Promise<void> {
@@ -133,7 +117,7 @@ export class SQLiteMemoryProvider extends MemoryProvider {
     const [user, platform] = id.split("-");
     const timestamp = Date.now();
 
-    this.monitor.publishEvent({
+    this.logger.info({
       type: "memory.sqlite.conversation.creating",
       message: "Creating new conversation",
       logLevel: "info",
@@ -142,7 +126,7 @@ export class SQLiteMemoryProvider extends MemoryProvider {
 
     try {
       stmt.run(id, user, platform, timestamp);
-      this.monitor.publishEvent({
+      this.logger.info({
         type: "memory.sqlite.conversation.created",
         message: "Created conversation successfully",
         logLevel: "info",
@@ -150,7 +134,7 @@ export class SQLiteMemoryProvider extends MemoryProvider {
       });
       return id;
     } catch (error) {
-      this.monitor.publishEvent({
+      this.logger.info({
         type: "memory.sqlite.conversation.creation_failed",
         message: "Failed to create conversation",
         logLevel: "error",
@@ -230,7 +214,7 @@ export class SQLiteMemoryProvider extends MemoryProvider {
   }
 
   async getConversation(conversationId: string): Promise<Conversation> {
-    this.monitor.publishEvent({
+    this.logger.info({
       type: "memory.sqlite.conversation.fetching",
       message: "Fetching conversation",
       logLevel: "info",
@@ -246,7 +230,7 @@ export class SQLiteMemoryProvider extends MemoryProvider {
     };
 
     if (!conversation) {
-      this.monitor.publishEvent({
+      this.logger.info({
         type: "memory.sqlite.conversation.not_found",
         message: "Conversation not found",
         logLevel: "error",
@@ -258,7 +242,7 @@ export class SQLiteMemoryProvider extends MemoryProvider {
     const messages = await this.getMessages({ conversationId });
     const contexts = await this.getContexts(conversationId);
 
-    this.monitor.publishEvent({
+    this.logger.info({
       type: "memory.sqlite.conversation.retrieved",
       message: "Retrieved conversation",
       logLevel: "info",
@@ -299,7 +283,7 @@ export class SQLiteMemoryProvider extends MemoryProvider {
     try {
       transaction();
     } catch (error) {
-      this.monitor.publishEvent({
+      this.logger.info({
         type: "memory.sqlite.conversation.deletion_failed",
         message: "Failed to delete conversation",
         logLevel: "error",

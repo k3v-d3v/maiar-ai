@@ -1,7 +1,8 @@
+import { Logger } from "winston";
 import { z } from "zod";
 
+import logger from "../../lib/logger";
 import { ICapabilities } from "../managers/model/capability/types";
-import { MonitorManager } from "../managers/monitor";
 import { OperationConfig } from "../pipeline/operations";
 
 /**
@@ -45,8 +46,8 @@ export abstract class ModelProvider {
   /**
    * Get access to the monitor manager
    */
-  public get monitor(): typeof MonitorManager {
-    return MonitorManager;
+  public get logger(): Logger {
+    return logger.child({ type: `model.provider.${this.id}` });
   }
 
   public addCapability(capability: ModelCapability): void {

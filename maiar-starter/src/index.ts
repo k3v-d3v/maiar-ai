@@ -4,13 +4,8 @@ import { config } from "dotenv";
 import { readFileSync } from "fs";
 import { join, resolve } from "path";
 
-import {
-  MemoryProvider,
-  ModelProvider,
-  MonitorProvider,
-  Plugin,
-  Runtime
-} from "@maiar-ai/core";
+import { MemoryProvider, ModelProvider, Plugin, Runtime } from "@maiar-ai/core";
+import { stdout, websocket } from "@maiar-ai/core/dist/transports";
 
 import {
   OpenAIImageGenerationModel,
@@ -20,27 +15,13 @@ import {
 
 import { SQLiteMemoryProvider } from "@maiar-ai/memory-sqlite";
 
-import { ConsoleMonitorProvider } from "@maiar-ai/monitor-console";
-import { WebSocketMonitorProvider } from "@maiar-ai/monitor-websocket";
-
 import { CharacterPlugin } from "@maiar-ai/plugin-character";
-import {
-  DiscordPlugin,
-  postListenerTrigger,
-  replyMessageExecutor,
-  sendMessageExecutor
-} from "@maiar-ai/plugin-discord";
 import { ExpressPlugin } from "@maiar-ai/plugin-express";
 import { ImageGenerationPlugin } from "@maiar-ai/plugin-image";
 import { SearchPlugin } from "@maiar-ai/plugin-search";
 import { TerminalPlugin } from "@maiar-ai/plugin-terminal";
 import { TextGenerationPlugin } from "@maiar-ai/plugin-text";
 import { TimePlugin } from "@maiar-ai/plugin-time";
-import {
-  createPostExecutor,
-  periodicPostTrigger,
-  XPlugin
-} from "@maiar-ai/plugin-x";
 
 import { router } from "./lib/express";
 
@@ -67,14 +48,6 @@ async function main() {
     dbPath: join(process.cwd(), "data", "conversations.db")
   });
 
-  const monitorProviders: MonitorProvider[] = [
-    new ConsoleMonitorProvider(),
-    new WebSocketMonitorProvider({
-      port: 3001,
-      path: "/monitor"
-    })
-  ];
-
   const plugins: Plugin[] = [
     new ImageGenerationPlugin(),
     new ExpressPlugin({
@@ -92,23 +65,23 @@ async function main() {
     }),
     new CharacterPlugin({
       character: readFileSync(join(process.cwd(), "character.xml"), "utf-8")
-    }),
-    new XPlugin({
-      client_id: process.env.X_CLIENT_ID as string,
-      client_secret: process.env.X_CLIENT_SECRET as string,
-      callback_url: process.env.X_CALLBACK_URL as string,
-      // You can customize which executors and triggers to use
-      // If not specified, all default ones will be used automatically
-      customExecutors: [createPostExecutor],
-      customTriggers: [periodicPostTrigger]
-    }),
-    new DiscordPlugin({
-      token: process.env.DISCORD_BOT_TOKEN as string,
-      clientId: process.env.DISCORD_CLIENT_ID as string,
-      commandPrefix: "!",
-      customExecutors: [sendMessageExecutor, replyMessageExecutor],
-      customTriggers: [postListenerTrigger]
     })
+    // new XPlugin({
+    //   client_id: process.env.X_CLIENT_ID as string,
+    //   client_secret: process.env.X_CLIENT_SECRET as string,
+    //   callback_url: process.env.X_CALLBACK_URL as string,
+    //   // You can customize which executors and triggers to use
+    //   // If not specified, all default ones will be used automatically
+    //   customExecutors: [createPostExecutor],
+    //   customTriggers: [periodicPostTrigger]
+    // }),
+    // new DiscordPlugin({
+    //   token: process.env.DISCORD_BOT_TOKEN as string,
+    //   clientId: process.env.DISCORD_CLIENT_ID as string,
+    //   commandPrefix: "!",
+    //   customExecutors: [sendMessageExecutor, replyMessageExecutor],
+    //   customTriggers: [postListenerTrigger]
+    // })
   ];
 
   const capabilityAliases: string[][] = [
@@ -119,9 +92,14 @@ async function main() {
   const agent = await Runtime.init({
     modelProviders,
     memoryProvider,
-    monitorProviders,
     plugins,
-    capabilityAliases
+    capabilityAliases,
+    options: {
+      logger: {
+        level: "debug",
+        transports: [stdout, websocket({ port: 3001, path: "/monitor" })]
+      }
+    }
   });
 
   // Handle shutdown gracefully

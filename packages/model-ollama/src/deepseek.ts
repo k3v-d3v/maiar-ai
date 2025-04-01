@@ -1,10 +1,6 @@
 import { z } from "zod";
 
-import {
-  ModelProvider,
-  ModelRequestConfig,
-  MonitorManager
-} from "@maiar-ai/core";
+import { ModelProvider, ModelRequestConfig } from "@maiar-ai/core";
 
 import { verifyBasicHealth } from "./index";
 
@@ -72,7 +68,7 @@ export class DeepseekModelProvider extends ModelProvider {
       // Send a GET request to the tag endpoint and verify if the model exists
       await verifyBasicHealth(this.baseUrl, this.model);
 
-      MonitorManager.publishEvent({
+      this.logger.info({
         type: "model.deepseek.health_check.passed",
         message: `Deepseek model '${this.model}' health check passed`,
         logLevel: "info",
@@ -82,7 +78,7 @@ export class DeepseekModelProvider extends ModelProvider {
         }
       });
     } catch (error) {
-      MonitorManager.publishEvent({
+      this.logger.info({
         type: "model.deepseek.health_check.failed",
         message: "Deepseek model health check failed",
         logLevel: "error",
@@ -101,7 +97,7 @@ export class DeepseekModelProvider extends ModelProvider {
     config?: ModelRequestConfig
   ): Promise<string> {
     try {
-      MonitorManager.publishEvent({
+      this.logger.info({
         type: "model.deepseek.generation.start",
         message: "Sending prompt to Deepseek",
         logLevel: "info",
@@ -134,7 +130,7 @@ export class DeepseekModelProvider extends ModelProvider {
       const data = await response.json();
       const text = data.response;
 
-      MonitorManager.publishEvent({
+      this.logger.info({
         type: "model.deepseek.generation.complete",
         message: "Received response from Deepseek",
         logLevel: "info",
@@ -152,7 +148,7 @@ export class DeepseekModelProvider extends ModelProvider {
 
       return cleanedText;
     } catch (error) {
-      MonitorManager.publishEvent({
+      this.logger.info({
         type: "model.deepseek.generation.error",
         message: "Error getting text from Deepseek",
         logLevel: "error",

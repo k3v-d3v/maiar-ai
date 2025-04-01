@@ -1,12 +1,6 @@
 import * as path from "path";
 
-import {
-  ExecutorImplementation,
-  MonitorManager,
-  Plugin,
-  Runtime,
-  Trigger
-} from "@maiar-ai/core";
+import { ExecutorImplementation, Plugin, Trigger } from "@maiar-ai/core";
 
 import { createAllCustomExecutors } from "./executors";
 import { runAuthFlow } from "./scripts/auth-flow";
@@ -53,12 +47,9 @@ export class XPlugin extends Plugin {
    * Override parent init to set the runtime and perform plugin initialization
    * This is called by the runtime during system startup
    */
-  async init(runtime: Runtime): Promise<void> {
-    // Call parent init to assign the runtime property
-    await super.init(runtime);
-
+  public async init(): Promise<void> {
     // This log confirms that we're being initialized with a valid runtime
-    MonitorManager.publishEvent({
+    this.logger.info({
       type: "plugin-x",
       message: "plugin x initalizing..."
     });
@@ -93,18 +84,18 @@ export class XPlugin extends Plugin {
     }
 
     if (!this.isAuthenticated) {
-      MonitorManager.publishEvent({
+      this.logger.info({
         type: "plugin-x",
         message: "🔐 X API Authentication Required"
       });
-      MonitorManager.publishEvent({
+      this.logger.info({
         type: "plugin-x",
         message:
           "No valid authentication token found. Starting authentication flow..."
       });
 
       // Automatically run the authentication flow
-      MonitorManager.publishEvent({
+      this.logger.info({
         type: "plugin-x",
         message:
           "You can also manually run authentication at any time with: pnpm maiar-x-login"
@@ -115,7 +106,7 @@ export class XPlugin extends Plugin {
         const success = await this.runAuthentication();
 
         if (success) {
-          MonitorManager.publishEvent({
+          this.logger.info({
             type: "plugin-x",
             message: "Plugin X authenticated successfully"
           });
@@ -123,7 +114,7 @@ export class XPlugin extends Plugin {
           console.error(
             "❌ X Plugin authentication failed. Plugin functionality will be limited."
           );
-          MonitorManager.publishEvent({
+          this.logger.info({
             type: "plugin-x",
             message: "❌ X Plugin authentication failed."
           });
@@ -132,14 +123,14 @@ export class XPlugin extends Plugin {
         console.error("❌ X Plugin authentication error:", error);
         console.error("You can attempt manual authentication with:");
         console.error("pnpm maiar-x-login\n");
-        MonitorManager.publishEvent({
+        this.logger.info({
           type: "plugin-x",
           message: `❌ Plugin X authentication error: ${error}. You can attempt manual authentication with: pnpm maiar-x-login`
         });
         throw error;
       }
     } else {
-      MonitorManager.publishEvent({
+      this.logger.info({
         type: "plugin-x",
         message: "Plugin X authenticated successfully"
       });
@@ -148,7 +139,7 @@ export class XPlugin extends Plugin {
     // Register executors and triggers now that we have a runtime
     this.registerExecutorsAndTriggers();
 
-    MonitorManager.publishEvent({
+    this.logger.info({
       type: "plugin-x",
       message: "Plugin X initialized."
     });
@@ -159,7 +150,7 @@ export class XPlugin extends Plugin {
    * This is separated from init for clarity and is only called after runtime is available
    */
   private registerExecutorsAndTriggers(): void {
-    MonitorManager.publishEvent({
+    this.logger.info({
       type: "plugin-x",
       message: "Registering X plugin executors and triggers"
     });
@@ -223,7 +214,7 @@ export class XPlugin extends Plugin {
       }
     }
 
-    MonitorManager.publishEvent({
+    this.logger.info({
       type: "plugin-x",
       message: `Registered ${this.executors.length} executors and ${this.triggers.length} triggers`
     });

@@ -1,4 +1,6 @@
-import { MonitorManager } from "../managers/monitor";
+import { Logger } from "winston";
+
+import logger from "../../lib/logger";
 import { Plugin } from "../providers/plugin";
 
 export interface Message {
@@ -55,9 +57,13 @@ export abstract class MemoryProvider {
     this.description = description;
   }
 
-  public get monitor(): typeof MonitorManager {
-    return MonitorManager;
+  public get logger(): Logger {
+    return logger.child({ type: `memory.provider.${this.id}` });
   }
+
+  public abstract init(): Promise<void>;
+
+  public abstract checkHealth(): Promise<void>;
 
   // Get memory plugin
   public abstract getPlugin(): Plugin;

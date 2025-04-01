@@ -45,8 +45,8 @@ const plugins = runtime.getPlugins();
 The runtime maintains a registry of all configured models and their capabilities:
 
 ```typescript
-// Capabilities are accessed through the runtime.operations
-const output = this.runtime.operations.executeCapability<string, string>(
+// Capabilities are accessed through the runtime
+const output = this.runtime.executeCapability<string, string>(
   "text-generation",
   prompt,
   config
@@ -112,7 +112,7 @@ const schema = z.object({
   country: z.string()
 });
 
-const location = await runtime.operations.getObject(
+const location = await runtime.getObject(
   schema,
   "Extract the city and country from: 'I live in Paris, France'",
   { temperature: 0.1 }
@@ -124,7 +124,7 @@ const location = await runtime.operations.getObject(
 Perform operation defined by model capability:
 
 ```typescript
-const image = await runtime.operations.executeCapability<string, Image>(
+const image = await runtime.executeCapability<string, Image>(
   "generate-image",
   prompt,
   config

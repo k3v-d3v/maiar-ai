@@ -35,4 +35,6 @@ export class TimePlugin extends Plugin {
       }
     });
   }
+
+  public async init(): Promise<void> {}
 }

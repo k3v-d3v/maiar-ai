@@ -1,4 +1,4 @@
-import { MonitorManager, Plugin, Runtime } from "@maiar-ai/core";
+import { Plugin } from "@maiar-ai/core";
 
 import { DiscordService } from "./services";
 import { DiscordExecutorFactory, DiscordTriggerFactory } from "./types";
@@ -46,18 +46,11 @@ export class DiscordPlugin extends Plugin {
     });
   }
 
-  public async init(runtime: Runtime): Promise<void> {
-    await super.init(runtime);
-
+  public async init(): Promise<void> {
     await this.discordService.login();
-
-    setTimeout(() => {
-      MonitorManager.publishEvent({
-        type: "plugin-discord",
-        message: "Discord plugin initialized",
-        metadata: { inviteUrl: this.discordService.generateInviteUrl() }
-      });
-    }, 3000);
+    this.logger.info("discord plugin initialized", {
+      inviteUrl: this.discordService.generateInviteUrl()
+    });
 
     // register the executors and triggers now that the runtime is initialized
     this.registerExecutors();

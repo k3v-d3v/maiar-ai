@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 import { BaseContextItem } from "./agent";
-import { OperationConfig } from "./operations";
 
 /**
  * A step in the execution pipeline
@@ -99,7 +98,3 @@ export type PipelineModification = z.infer<typeof PipelineModificationSchema>;
 export type ContextItemWithHistory = BaseContextItem & {
   messageHistory: { role: string; content: string; timestamp: number }[];
 };
-
-export interface GetObjectConfig extends OperationConfig {
-  maxRetries?: number;
-}

@@ -18,7 +18,7 @@ const LocationSchema = z.object({
 });
 
 // Use getObject to extract data
-const location = await runtime.operations.getObject(
+const location = await runtime.getObject(
   LocationSchema,
   "Extract the location from: 'I live in Paris, France'",
   { temperature: 0.1 }
@@ -58,14 +58,14 @@ const config = {
   model: "specific-model-id" // Use a specific model
 };
 
-const result = await runtime.operations.getObject(schema, prompt, config);
+const result = await runtime.getObject(schema, prompt, config);
 ```
 
 ### Error Handling
 
 ```typescript
 try {
-  const result = await runtime.operations.getObject(schema, prompt);
+  const result = await runtime.getObject(schema, prompt);
 } catch (error) {
   if (error instanceof z.ZodError) {
     // Handle validation errors
@@ -90,7 +90,7 @@ const CommandSchema = z.object({
   parameters: z.record(z.string())
 });
 
-const command = await runtime.operations.getObject(
+const command = await runtime.getObject(
   CommandSchema,
   "Create a new user named John with age 25",
   { temperature: 0.1 }
@@ -119,7 +119,7 @@ const ContactSchema = z.object({
   })
 });
 
-const contact = await runtime.operations.getObject(
+const contact = await runtime.getObject(
   ContactSchema,
   "My email is john@example.com, phone is 555-0123, and I live at 123 Main St, Boston, USA"
 );
@@ -136,7 +136,7 @@ const DecisionSchema = z.object({
   reasoning: z.string()
 });
 
-const analysis = await runtime.operations.getObject(
+const analysis = await runtime.getObject(
   DecisionSchema,
   "Should we approve this transaction of $5000 to an unknown account?",
   { temperature: 0.2 }
@@ -199,7 +199,7 @@ const ArticleSchema = z.object({
 
 async function extractArticleData(runtime: Runtime, text: string) {
   try {
-    const article = await runtime.operations.getObject(
+    const article = await runtime.getObject(
       ArticleSchema,
       `Extract article information from this text: ${text}`,
       {

@@ -23,7 +23,7 @@ export class SearchPlugin extends Plugin {
       description:
         "Agent uses this plugin to search the web for information. Use this to find detailed up-to-date information on a given topic. Use this when the agent thinks it doesn't know something.",
       execute: async (context: AgentContext): Promise<PluginResult> => {
-        const params = await this.runtime.operations.getObject(
+        const params = await this.runtime.getObject(
           PerplexityQueryResponseSchema,
           generateQueryTemplate(context.contextChain),
           { temperature: 0.7 }
@@ -45,4 +45,6 @@ export class SearchPlugin extends Plugin {
       }
     });
   }
+
+  public async init(): Promise<void> {}
 }

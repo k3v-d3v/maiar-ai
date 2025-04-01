@@ -1,31 +1,111 @@
+import { Logger } from "winston";
+
+import logger from "../../../lib/logger";
 import { OperationConfig } from "../../pipeline/operations";
 import { ModelProvider } from "../../providers/model";
-import { MonitorManager } from "../monitor";
 import { CapabilityRegistry } from "./capability";
 import { ICapabilities } from "./capability/types";
 
 /**
- * ModelManager is responsible for managing model instances and their capabilities
+ * ModelManager is responsible to managing model providers and their capabilities
  */
 export class ModelManager {
   private models: Map<string, ModelProvider>;
   private capabilityRegistry: CapabilityRegistry;
   private capabilityAliases: Map<string, string>;
 
-  constructor(...models: ModelProvider[]) {
+  /**
+   * Returns a namespaced logger instance for the model manager
+   *
+   * @private
+   * @returns {Logger} Logger instance
+   */
+  private get logger(): Logger {
+    return logger.child({ type: "model.manager" });
+  }
+
+  constructor() {
     this.models = new Map<string, ModelProvider>();
     this.capabilityRegistry = new CapabilityRegistry();
     this.capabilityAliases = new Map<string, string>();
-
-    for (const model of models) {
-      this.registerModel(model);
-    }
   }
 
   /**
-   * Register a model
+   * Initializes all registered model providers
+   *
+   * @returns {Promise<void>}
    */
-  private registerModel(modelProvider: ModelProvider): void {
+  public async init(): Promise<void> {
+    await Promise.all(
+      Array.from(this.models.values()).map(async (modelProvider) => {
+        try {
+          await modelProvider.init();
+          this.logger.debug(
+            `model provider "${modelProvider.id}" initialized successfully`,
+            { modelProvider: modelProvider.id }
+          );
+        } catch (err: unknown) {
+          const error = err instanceof Error ? err : new Error(String(err));
+          this.logger.error(
+            `model provider initialization failed for "${modelProvider.id}"`,
+            { error: error.message }
+          );
+        }
+      })
+    );
+  }
+
+  /**
+   * Checks the health of all registered model providers
+   *
+   * @returns {Promise<void>}
+   */
+  public async checkHealth(): Promise<void> {
+    await Promise.all(
+      Array.from(this.models.values()).map(async (model) => {
+        try {
+          await model.checkHealth();
+          this.logger.debug(
+            `health check for model provider "${model.id}" passed`,
+            { modelProvider: model.id }
+          );
+        } catch (err: unknown) {
+          const error = err instanceof Error ? err : new Error(String(err));
+          this.logger.error(
+            `health check for model provider "${model.id}" failed`,
+            { modelProvider: model.id, error: error.message }
+          );
+
+          throw error;
+        }
+      })
+    );
+  }
+
+  /**
+   * Registers one or more model providers to the model manager
+   *
+   * @param {...ModelProvider} modelProviders - The model providers to register
+   * @returns {ModelManager} The current instance of the model manager
+   */
+  public registerModelProviders(
+    ...modelProviders: ModelProvider[]
+  ): ModelManager {
+    for (const modelProvider of modelProviders) {
+      this.registerModelProvider(modelProvider);
+    }
+
+    return this;
+  }
+
+  /**
+   * Registers a single model provider and its capabilities
+   *
+   * @private
+   * @param {ModelProvider} modelProvider - The model provider to register
+   * @returns {void}
+   */
+  private registerModelProvider(modelProvider: ModelProvider): void {
     this.models.set(modelProvider.id, modelProvider);
 
     // Register all capabilities provided by the model
@@ -45,62 +125,107 @@ export class ModelManager {
           capability.id,
           modelProvider.id
         );
-        MonitorManager.publishEvent({
-          type: "default.model.capability.set",
-          message: `set model provider ${modelProvider.id} as default for capability "${capability.id}"`,
-          logLevel: "debug"
-        });
+        this.logger.debug(
+          `model provider "${modelProvider.id}" set as default for capability "${capability.id}"`,
+          { modelProvider: modelProvider.id, capability: capability.id }
+        );
       }
     }
 
-    MonitorManager.publishEvent({
-      type: "model.provider.registered",
-      message: `model provider "${modelProvider.id}" registered successfully`,
-      logLevel: "debug"
-    });
-  }
-
-  public async init(): Promise<void> {
-    await Promise.all(
-      Array.from(this.models.values()).map(async (modelProvider) => {
-        try {
-          await modelProvider.init();
-          MonitorManager.publishEvent({
-            type: "model.provider.initialization.success",
-            message: `model provider initialized successfully for "${modelProvider.id}"`,
-            logLevel: "debug"
-          });
-        } catch (err: unknown) {
-          const error = err instanceof Error ? err : new Error(String(err));
-          MonitorManager.publishEvent({
-            type: "model.provider.initialization.failed",
-            message: `model provider initialization failed for "${modelProvider.id}"`,
-            logLevel: "error",
-            metadata: { error: error.message }
-          });
-        }
-      })
+    this.logger.debug(
+      `model provider "${modelProvider.id}" registered successfully`
     );
   }
 
   /**
-   * Register a capability alias
+   * Registers capability aliases to the model manager
+   *
+   * @param {string[][]} capabilityAliases - The capability aliases to register
+   * @returns {ModelManager} The current instance of the model manager
    */
-  public registerCapabilityAlias(alias: string, canonicalId: string): void {
-    if (!this.capabilityRegistry.hasCapability(canonicalId)) {
-      throw new Error(`Capability ${canonicalId} not found`);
+  public registerCapabilityAliases(
+    capabilityAliases: string[][]
+  ): ModelManager {
+    // Add capability aliases to the model manager
+    for (const aliasGroup of capabilityAliases) {
+      const canonicalId =
+        aliasGroup.find((id) => this.hasCapability(id)) ??
+        (aliasGroup[0] as string);
+
+      // Register all other IDs in the group as aliases to the canonical ID
+      for (const alias of aliasGroup) {
+        if (alias !== canonicalId) {
+          if (!this.capabilityRegistry.hasCapability(canonicalId)) {
+            throw new Error(`Capability ${canonicalId} not found`);
+          }
+          this.capabilityAliases.set(alias, canonicalId);
+          this.logger.debug(
+            `registered capability alias "${alias}" to "${canonicalId}"`,
+            { alias, canonicalId }
+          );
+        }
+      }
     }
-    this.capabilityAliases.set(alias, canonicalId);
-    MonitorManager.publishEvent({
-      type: "model.capability.alias.registered",
-      message: `registered capability alias "${alias}" for "${canonicalId}"`,
-      logLevel: "debug",
-      metadata: { alias, canonicalId }
-    });
+
+    return this;
   }
 
   /**
-   * Execute a capability with the given input
+   * Get all available capabilities
+   *
+   * @returns {string[]} All available capabilities
+   */
+  public getAvailableCapabilities(): string[] {
+    return this.capabilityRegistry.getAllCapabilities();
+  }
+
+  /**
+   * Get all models that support a capability
+   *
+   * @param {string} capabilityId - The capability ID
+   * @returns {string[]} All models that support the capability
+   */
+  public getModelsWithCapability(capabilityId: string): string[] {
+    const resolvedId = this.capabilityAliases.get(capabilityId) || capabilityId;
+    return this.capabilityRegistry.getModelsWithCapability(resolvedId);
+  }
+
+  /**
+   * Sets the default model for a capability
+   *
+   * @param {string} capabilityId - The capability ID
+   * @param {string} modelId - The model ID
+   * @returns {void}
+   */
+  public setDefaultModelForCapability(
+    capabilityId: string,
+    modelId: string
+  ): void {
+    const resolvedId = this.capabilityAliases.get(capabilityId) || capabilityId;
+    this.capabilityRegistry.setDefaultModelForCapability(resolvedId, modelId);
+  }
+
+  /**
+   * Checks if any model supports a capability
+   *
+   * @param {string} capabilityId - The capability ID
+   * @returns {boolean} True if any model supports the capability, false otherwise
+   */
+  public hasCapability(capabilityId: string): boolean {
+    const resolvedId = this.capabilityAliases.get(capabilityId) || capabilityId;
+    return this.capabilityRegistry.hasCapability(resolvedId);
+  }
+
+  /**
+   * Executes a capability with the given input.
+   *
+   * @template K
+   * @param {K} capabilityId - The capability ID
+   * @param {ICapabilities[K]["input"]} input - The input for the capability
+   * @param {OperationConfig} [config] - Optional configuration
+   * @param {string} [modelId] - The model to use (optional)
+   * @returns {Promise<ICapabilities[K]["output"]>} The capability's output
+   * @throws {Error} If no valid model is found or input validation fails
    */
   public async executeCapability<K extends keyof ICapabilities>(
     capabilityId: K,
@@ -149,66 +274,5 @@ export class ModelManager {
     }
     const result = await capability.execute(validatedInput.data, config);
     return capability.output.parse(result) as ICapabilities[K]["output"];
-  }
-
-  /**
-   * Get all available capabilities
-   */
-  public getAvailableCapabilities(): string[] {
-    return this.capabilityRegistry.getAllCapabilities();
-  }
-
-  /**
-   * Get all models that support a capability
-   */
-  public getModelsWithCapability(capabilityId: string): string[] {
-    const resolvedId = this.capabilityAliases.get(capabilityId) || capabilityId;
-    return this.capabilityRegistry.getModelsWithCapability(resolvedId);
-  }
-
-  /**
-   * Set the default model for a capability
-   */
-  public setDefaultModelForCapability(
-    capabilityId: string,
-    modelId: string
-  ): void {
-    const resolvedId = this.capabilityAliases.get(capabilityId) || capabilityId;
-    this.capabilityRegistry.setDefaultModelForCapability(resolvedId, modelId);
-  }
-
-  /**
-   * Check if any model supports a capability
-   */
-  public hasCapability(capabilityId: string): boolean {
-    const resolvedId = this.capabilityAliases.get(capabilityId) || capabilityId;
-    return this.capabilityRegistry.hasCapability(resolvedId);
-  }
-
-  public async checkHealth(): Promise<void> {
-    await Promise.all(
-      Array.from(this.models.values()).map(async (model) => {
-        try {
-          await model.checkHealth();
-          MonitorManager.publishEvent({
-            type: "model.healthcheck.passed",
-            message: `health check for model provider ${model.id} passed`,
-            logLevel: "debug"
-          });
-        } catch (err: unknown) {
-          const error = err instanceof Error ? err : new Error(String(err));
-          MonitorManager.publishEvent({
-            type: "model.healthcheck.failed",
-            message: `health check for model provider ${model.id} failed`,
-            logLevel: "error",
-            metadata: {
-              error: error.message
-            }
-          });
-
-          throw error;
-        }
-      })
-    );
   }
 }

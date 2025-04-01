@@ -26,7 +26,7 @@ this.addExecutor({
   execute: async (context: AgentContext): Promise<PluginResult> => {
     try {
       // Extract prompt from context using getObject
-      const promptResponse = await this.runtime.operations.getObject(
+      const promptResponse = await this.runtime.getObject(
         PromptResponseSchema,
         generatePromptTemplate(context.contextChain),
         { temperature: 0.7 }
@@ -81,7 +81,7 @@ const PromptResponseSchema = z.object({
 });
 
 // 2. Create a prompt string that guides the AI in extracting data
-const promptResponse = await this.runtime.operations.getObject(
+const promptResponse = await this.runtime.getObject(
   PromptResponseSchema,
   `Generate a prompt for an image generation model based on the context chain.
    Look for relevant information in the most recent context items.
@@ -107,7 +107,7 @@ Executors can read from and enhance the context chain:
 
 ```typescript
 execute: async (context: AgentContext): Promise<PluginResult> => {
-  const promptResponse = await this.runtime.operations.getObject(
+  const promptResponse = await this.runtime.getObject(
     PromptResponseSchema,
     generatePromptTemplate(context.contextChain),
     { temperature: 0.7 }
@@ -183,7 +183,7 @@ Handle extraction and processing errors:
 execute: async (context: AgentContext): Promise<PluginResult> => {
   try {
     // Extract data with getObject
-    const promptResponse = await this.runtime.operations.getObject(
+    const promptResponse = await this.runtime.getObject(
       PromptResponseSchema,
       generatePromptTemplate(context.contextChain)
     );
@@ -242,7 +242,7 @@ Be explicit about context modifications:
 ```typescript
 execute: async (context: AgentContext): Promise<PluginResult> => {
   // Extract data
-  const promptResponse = await this.runtime.operations.getObject(
+  const promptResponse = await this.runtime.getObject(
     PromptResponseSchema,
     generatePromptTemplate(context.contextChain)
   );
@@ -306,7 +306,7 @@ export class PluginImageGeneration extends PluginBase {
       description: "Generate an image based on a text prompt",
       execute: async (context: AgentContext): Promise<PluginResult> => {
         try {
-          const promptResponse = await this.runtime.operations.getObject(
+          const promptResponse = await this.runtime.getObject(
             PromptResponseSchema,
             generatePromptTemplate(context.contextChain),
             { temperature: 0.7 }

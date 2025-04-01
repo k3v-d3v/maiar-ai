@@ -24,23 +24,39 @@ export class FileSystemMemoryProvider extends MemoryProvider {
       description: "Stores conversations as JSON files in the filesystem"
     });
     this.basePath = config.basePath;
-    this.initializeStorage();
     this.plugin = new FileSystemMemoryPlugin(config);
   }
 
-  private async initializeStorage() {
+  public async init(): Promise<void> {
     try {
       await fs.mkdir(this.basePath, { recursive: true });
-      this.monitor.publishEvent({
+      this.logger.info({
         type: "memory.filesystem.init",
         message: "Initialized filesystem memory storage",
         logLevel: "info",
         metadata: { path: this.basePath }
       });
     } catch (error) {
-      this.monitor.publishEvent({
+      this.logger.info({
         type: "memory.filesystem.init.failed",
         message: "Failed to initialize filesystem memory storage",
+        logLevel: "error",
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          path: this.basePath
+        }
+      });
+      throw error;
+    }
+  }
+
+  public async checkHealth(): Promise<void> {
+    try {
+      await fs.access(this.basePath);
+    } catch (error) {
+      this.logger.info({
+        type: "memory.filesystem.health_check.failed",
+        message: "Failed to check filesystem memory storage health",
         logLevel: "error",
         metadata: {
           error: error instanceof Error ? error.message : String(error),
@@ -75,7 +91,7 @@ export class FileSystemMemoryProvider extends MemoryProvider {
     const filePath = this.getConversationPath(conversationId);
     await fs.writeFile(filePath, JSON.stringify(conversation, null, 2));
 
-    this.monitor.publishEvent({
+    this.logger.info({
       type: "memory.filesystem.conversation.created",
       message: "Created new conversation",
       logLevel: "info",
@@ -144,7 +160,7 @@ export class FileSystemMemoryProvider extends MemoryProvider {
       );
       return JSON.parse(data);
     } catch (error) {
-      this.monitor.publishEvent({
+      this.logger.info({
         type: "memory.filesystem.conversation.read.failed",
         message: "Failed to read conversation",
         logLevel: "error",
@@ -161,7 +177,7 @@ export class FileSystemMemoryProvider extends MemoryProvider {
     try {
       await fs.unlink(this.getConversationPath(conversationId));
     } catch (error) {
-      this.monitor.publishEvent({
+      this.logger.info({
         type: "memory.filesystem.conversation.delete.failed",
         message: "Failed to delete conversation",
         logLevel: "error",

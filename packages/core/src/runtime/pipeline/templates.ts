@@ -116,12 +116,6 @@ export function extractJson(str: string): string {
   return matches[matches.length - 1] ?? "";
 }
 
-// Helper to clean JSON string before parsing
-export function cleanJsonString(str: string): string {
-  // Just trim whitespace - the model should be giving us valid JSON
-  return str.trim();
-}
-
 // Template sections
 const EXAMPLES_SECTION = `<examples>
 

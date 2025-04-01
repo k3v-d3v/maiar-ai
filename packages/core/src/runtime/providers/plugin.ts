@@ -1,5 +1,7 @@
+import { Logger } from "winston";
+
 import { Runtime } from "../";
-import { MonitorManager } from "../managers";
+import logger from "../../lib/logger";
 import { ICapabilities } from "../managers/model/capability/types";
 import { AgentContext } from "../pipeline/agent";
 
@@ -43,6 +45,10 @@ export abstract class Plugin {
   private triggerImplementations: Trigger[];
   private _runtime: Runtime | undefined;
 
+  public get logger(): Logger {
+    return logger.child({ type: `plugin.${this.id}` });
+  }
+
   constructor({
     id,
     name,
@@ -64,9 +70,14 @@ export abstract class Plugin {
     this._runtime = undefined;
   }
 
-  public init(runtime: Runtime): void {
+  public _setRuntime(runtime: Runtime): void {
+    if (this._runtime) {
+      throw new Error("Runtime is already injected");
+    }
     this._runtime = runtime;
   }
+
+  public abstract init(): Promise<void>;
 
   public addExecutor(executor: ExecutorImplementation): void {
     this.executorImplementations.push(executor);
@@ -90,11 +101,6 @@ export abstract class Plugin {
       };
     }
     return executor.execute(context);
-  }
-
-  public get monitor(): typeof MonitorManager {
-    if (!this._runtime) throw new Error("Runtime is not initialized yet");
-    return this._runtime.monitor;
   }
 
   public get runtime(): Runtime {

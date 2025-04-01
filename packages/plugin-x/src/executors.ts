@@ -50,7 +50,7 @@ export const createPostExecutor = createXExecutor(
       execute: async (context: AgentContext): Promise<PluginResult> => {
         try {
           const tweetTemplate = generateTweetTemplate(context.contextChain);
-          const params = await runtime.operations.getObject(
+          const params = await runtime.getObject(
             PostTweetSchema,
             tweetTemplate
           );

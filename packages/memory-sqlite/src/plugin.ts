@@ -46,7 +46,7 @@ export class SQLiteMemoryPlugin extends Plugin {
         const documentId = `doc_${timestamp}_${Math.random().toString(36).substr(2, 9)}`;
 
         // Get data to store in database from context chain
-        const formattedResponse = await this.runtime.operations.getObject(
+        const formattedResponse = await this.runtime.getObject(
           SQLiteMemoryUploadSchema,
           generateUploadDocumentTemplate(context.contextChain),
           { temperature: 0.2 }
@@ -80,7 +80,7 @@ export class SQLiteMemoryPlugin extends Plugin {
       description: "Remove a peice of information from the sandbox database",
       execute: async (context: AgentContext): Promise<PluginResult> => {
         // Construct query for document ids
-        const queryFormattedResponse = await this.runtime.operations.getObject(
+        const queryFormattedResponse = await this.runtime.getObject(
           SQLiteQuerySchema,
           generateQueryTemplate(context.contextChain),
           { temperature: 0.2 }
@@ -124,7 +124,7 @@ export class SQLiteMemoryPlugin extends Plugin {
         "Query the sandbox database for documnets that match the user or plugin requests",
       execute: async (context: AgentContext): Promise<PluginResult> => {
         // Construct query from context
-        const queryFormattedResponse = await this.runtime.operations.getObject(
+        const queryFormattedResponse = await this.runtime.getObject(
           SQLiteQuerySchema,
           generateQueryTemplate(context.contextChain, ["id", "content"]),
           { temperature: 0.2 }

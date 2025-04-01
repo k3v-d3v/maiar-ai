@@ -136,6 +136,8 @@ export class WebSocketPlugin extends Plugin {
     });
   }
 
+  public async init(): Promise<void> {}
+
   async stop(): Promise<void> {
     if (this.wss) {
       this.wss.close();

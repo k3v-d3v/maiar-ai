@@ -56,4 +56,6 @@ export class TextGenerationPlugin extends Plugin {
       }
     });
   }
+
+  public async init(): Promise<void> {}
 }

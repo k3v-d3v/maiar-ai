@@ -35,17 +35,15 @@ export class PostgresMemoryProvider extends MemoryProvider {
     poolInstance.init(config);
     // Get the pool safely after initialization
     this.pool = poolInstance.getPool();
-    this.initializeStorage();
-    this.checkHealth();
     this.plugin = new PostgresMemoryPlugin();
   }
 
-  private async checkHealth() {
+  public async checkHealth(): Promise<void> {
     try {
       const client = await this.pool.connect();
       try {
         await client.query("SELECT 1");
-        this.monitor.publishEvent({
+        this.logger.info({
           type: "memory.postgres.health_check",
           message: "PostgreSQL health check passed",
           logLevel: "info"
@@ -54,7 +52,7 @@ export class PostgresMemoryProvider extends MemoryProvider {
         client.release();
       }
     } catch (error) {
-      this.monitor.publishEvent({
+      this.logger.info({
         type: "memory.postgres.health_check.failed",
         message: "PostgreSQL health check failed",
         logLevel: "error",
@@ -68,16 +66,16 @@ export class PostgresMemoryProvider extends MemoryProvider {
     }
   }
 
-  private async initializeStorage() {
+  public async init(): Promise<void> {
     try {
       await this.createTables();
-      this.monitor.publishEvent({
+      this.logger.info({
         type: "memory.postgres.storage.initialized",
         message: "Initialized PostgreSQL memory storage",
         logLevel: "info"
       });
     } catch (error) {
-      this.monitor.publishEvent({
+      this.logger.info({
         type: "memory.postgres.storage.initialization_failed",
         message: "Failed to initialize storage",
         logLevel: "error",
@@ -139,7 +137,7 @@ export class PostgresMemoryProvider extends MemoryProvider {
     const [user, platform] = id.split("-");
     const timestamp = Date.now();
 
-    this.monitor.publishEvent({
+    this.logger.info({
       type: "memory.postgres.conversation.creating",
       message: "Creating new conversation",
       logLevel: "info",
@@ -159,7 +157,7 @@ export class PostgresMemoryProvider extends MemoryProvider {
             options?.metadata ? JSON.stringify(options.metadata) : null
           ]
         );
-        this.monitor.publishEvent({
+        this.logger.info({
           type: "memory.postgres.conversation.created",
           message: "Created conversation successfully",
           logLevel: "info",
@@ -170,7 +168,7 @@ export class PostgresMemoryProvider extends MemoryProvider {
         client.release();
       }
     } catch (error) {
-      this.monitor.publishEvent({
+      this.logger.info({
         type: "memory.postgres.conversation.creation_failed",
         message: "Failed to create conversation",
         logLevel: "error",
@@ -277,7 +275,7 @@ export class PostgresMemoryProvider extends MemoryProvider {
   }
 
   async getConversation(conversationId: string): Promise<Conversation> {
-    this.monitor.publishEvent({
+    this.logger.info({
       type: "memory.postgres.conversation.fetching",
       message: "Fetching conversation",
       logLevel: "info",
@@ -292,7 +290,7 @@ export class PostgresMemoryProvider extends MemoryProvider {
       );
 
       if (conversationResult.rows.length === 0) {
-        this.monitor.publishEvent({
+        this.logger.info({
           type: "memory.postgres.conversation.not_found",
           message: "Conversation not found",
           logLevel: "error",
@@ -305,7 +303,7 @@ export class PostgresMemoryProvider extends MemoryProvider {
       const messages = await this.getMessages({ conversationId });
       const contexts = await this.getContexts(conversationId);
 
-      this.monitor.publishEvent({
+      this.logger.info({
         type: "memory.postgres.conversation.retrieved",
         message: "Retrieved conversation",
         logLevel: "info",
@@ -339,7 +337,7 @@ export class PostgresMemoryProvider extends MemoryProvider {
         await client.query("COMMIT");
       } catch (error) {
         await client.query("ROLLBACK");
-        this.monitor.publishEvent({
+        this.logger.info({
           type: "memory.postgres.conversation.deletion_failed",
           message: "Failed to delete conversation",
           logLevel: "error",

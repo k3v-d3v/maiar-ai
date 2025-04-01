@@ -1,11 +1,7 @@
 import OpenAI from "openai";
 import { z } from "zod";
 
-import {
-  ModelProvider,
-  ModelRequestConfig,
-  MonitorManager
-} from "@maiar-ai/core";
+import { ModelProvider, ModelRequestConfig } from "@maiar-ai/core";
 
 import {
   imageGenerationSchema,
@@ -61,17 +57,6 @@ export class OpenAIModelProvider extends ModelProvider {
         output: textGenerationSchema.output,
         execute: this.generateText.bind(this)
       });
-
-      this.monitor.publishEvent({
-        type: "openai.model.capability.registration",
-        message: "capabilty.registration",
-        metadata: {
-          model: this.id,
-          capability: "text-generation",
-          input: textGenerationSchema.input,
-          output: textGenerationSchema.output
-        }
-      });
     }
 
     if (this.models.some(isImageGenerationModel)) {
@@ -107,6 +92,16 @@ export class OpenAIModelProvider extends ModelProvider {
       throw new Error("No valid image URLs generated");
     }
 
+    this.logger.info(
+      `model provider "${this.id}" executed capability ${IMAGE_GENERATION_CAPABILITY_ID}`,
+      {
+        modelProvider: this.id,
+        capabilityId: IMAGE_GENERATION_CAPABILITY_ID,
+        input: prompt,
+        output: filteredUrls
+      }
+    );
+
     return filteredUrls;
   }
 
@@ -134,30 +129,27 @@ export class OpenAIModelProvider extends ModelProvider {
         throw new Error("No content in response");
       }
 
-      // Log the interaction
-      this.monitor.publishEvent({
-        type: "model.provider.interaction",
-        message: `model provider ${this.id} executed capability text-generation`,
-        metadata: {
-          modelId: this.id,
-          capabilityId: "text-generation",
+      this.logger.info(
+        `model provider "${this.id}" executed capability ${TEXT_GENERATION_CAPABILITY_ID}`,
+        {
+          modelProvider: this.id,
+          capabilityId: TEXT_GENERATION_CAPABILITY_ID,
           input: prompt,
           output: content
         }
-      });
+      );
 
       return content;
-    } catch (error) {
-      // Log the error
-      MonitorManager.publishEvent({
-        type: "model_error",
-        message: `Error executing capability text-generation on model ${this.id}`,
-        metadata: {
-          modelId: this.id,
-          capabilityId: "text-generation",
-          error: error instanceof Error ? error.message : String(error)
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.logger.error(
+        `error executing capability ${TEXT_GENERATION_CAPABILITY_ID} on model ${this.id}`,
+        {
+          modelProvider: this.id,
+          capabilityId: TEXT_GENERATION_CAPABILITY_ID,
+          error: error.message
         }
-      });
+      );
       throw error;
     }
   }

@@ -37,7 +37,7 @@ export class FileSystemMemoryPlugin extends Plugin {
         const documentId = `doc_${timestamp}_${Math.random().toString(36).slice(9)}`;
 
         // Get data to store in database from context chain
-        const formattedResponse = await this.runtime.operations.getObject(
+        const formattedResponse = await this.runtime.getObject(
           FileSystemMemoryUploadSchema,
           generateUploadDocumentTemplate(context.contextChain),
           { temperature: 0.2 }
@@ -118,12 +118,11 @@ export class FileSystemMemoryPlugin extends Plugin {
             sandboxData.documents || [];
 
           // Get query criteria from context chain
-          const queryFormattedResponse =
-            await this.runtime.operations.getObject(
-              FileSystemQuerySchema,
-              generateQueryTemplate(context.contextChain),
-              { temperature: 0.2 }
-            );
+          const queryFormattedResponse = await this.runtime.getObject(
+            FileSystemQuerySchema,
+            generateQueryTemplate(context.contextChain),
+            { temperature: 0.2 }
+          );
 
           // Filter documents using query
           const remainingDocuments = documents.filter(
@@ -177,12 +176,11 @@ export class FileSystemMemoryPlugin extends Plugin {
             sandboxData.documents || [];
 
           // Get query criteria from context chain
-          const queryFormattedResponse =
-            await this.runtime.operations.getObject(
-              FileSystemQuerySchema,
-              generateQueryTemplate(context.contextChain),
-              { temperature: 0.2 }
-            );
+          const queryFormattedResponse = await this.runtime.getObject(
+            FileSystemQuerySchema,
+            generateQueryTemplate(context.contextChain),
+            { temperature: 0.2 }
+          );
 
           // Find all matching documents
           const matchingDocuments = documents.filter((doc) =>
