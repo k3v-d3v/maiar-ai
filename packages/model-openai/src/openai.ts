@@ -1,11 +1,7 @@
 import OpenAI from "openai";
 import { z } from "zod";
 
-import {
-  ModelProvider,
-  ModelRequestConfig,
-  MonitorManager
-} from "@maiar-ai/core";
+import { ModelProvider, ModelRequestConfig } from "@maiar-ai/core";
 
 import {
   imageGenerationSchema,
@@ -62,15 +58,12 @@ export class OpenAIModelProvider extends ModelProvider {
         execute: this.generateText.bind(this)
       });
 
-      this.monitor.publishEvent({
+      this.logger.info("add text generation capability", {
         type: "openai.model.capability.registration",
-        message: "capabilty.registration",
-        metadata: {
-          model: this.id,
-          capability: "text-generation",
-          input: textGenerationSchema.input,
-          output: textGenerationSchema.output
-        }
+        model: this.id,
+        capability: "text-generation",
+        inputSchema: textGenerationSchema.input,
+        outputSchema: textGenerationSchema.output
       });
     }
 
@@ -82,6 +75,14 @@ export class OpenAIModelProvider extends ModelProvider {
         input: imageGenerationSchema.input,
         output: imageGenerationSchema.output,
         execute: this.generateImage.bind(this)
+      });
+
+      this.logger.info("add image generation capability", {
+        type: "openai.model.capability.registration",
+        model: this.id,
+        capability: "image-generation",
+        inputSchema: imageGenerationSchema.input,
+        outputSchema: imageGenerationSchema.output
       });
     }
   }
@@ -135,7 +136,7 @@ export class OpenAIModelProvider extends ModelProvider {
       }
 
       // Log the interaction
-      this.monitor.publishEvent({
+      this.logger.info({
         type: "model.provider.interaction",
         message: `model provider ${this.id} executed capability text-generation`,
         metadata: {
@@ -148,16 +149,13 @@ export class OpenAIModelProvider extends ModelProvider {
 
       return content;
     } catch (error) {
-      // Log the error
-      MonitorManager.publishEvent({
+      this.logger.error("error executing capability text-generation on model", {
         type: "model_error",
-        message: `Error executing capability text-generation on model ${this.id}`,
-        metadata: {
-          modelId: this.id,
-          capabilityId: "text-generation",
-          error: error instanceof Error ? error.message : String(error)
-        }
+        modelId: this.id,
+        capabilityId: "text-generation",
+        error: error instanceof Error ? error.message : String(error)
       });
+
       throw error;
     }
   }
