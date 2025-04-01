@@ -1,9 +1,13 @@
 import { Runtime, Trigger, UserInputContext } from "@maiar-ai/core";
-import { MonitorManager } from "@maiar-ai/core";
+import * as maiarLogger from "@maiar-ai/core/dist/logger";
 
 import { XService } from "./services";
 import { xPostTemplate } from "./templates";
 import { TriggerConfig, XTriggerFactory } from "./types";
+
+const logger = maiarLogger.default.child({
+  scope: "plugin-x"
+});
 
 /**
  * Custom triggers for the X plugin
@@ -35,15 +39,14 @@ export const periodicPostTrigger = createXTrigger(
     return {
       id: "x_periodic_post",
       start: (): void => {
-        MonitorManager.publishEvent({
+        logger.info(`starting x periodic post trigger`, {
           type: "plugin-x.trigger.start",
-          message: `Starting X periodic post trigger (interval: ${baseIntervalMinutes} mins, randomization: ${randomizationMinutes} mins)`,
-          logLevel: "info"
+          interval: `${baseIntervalMinutes} mins`,
+          randomization: `${randomizationMinutes} mins`
         });
-        MonitorManager.publishEvent({
+        logger.info("using post template", {
           type: "plugin-x.trigger.template",
-          message: `Using post template: "${postTemplate.substring(0, 50)}..." (truncated)`,
-          logLevel: "info"
+          template: `${postTemplate.substring(0, 50)}... (truncated)`
         });
 
         const scheduleNextPost = async () => {
@@ -65,90 +68,79 @@ export const periodicPostTrigger = createXTrigger(
               user: "self-invoked-x-post-trigger"
             };
 
-            MonitorManager.publishEvent({
+            logger.info("creating x post event to invoke agent", {
               type: "plugin-x.event.creating",
-              message: "Creating X post event to invoke agent",
-              logLevel: "info",
-              metadata: {
-                contextId: initialContext.id,
-                pluginId: initialContext.pluginId,
-                action: initialContext.action
-              }
+              contextId: initialContext.id,
+              pluginId: initialContext.pluginId,
+              action: initialContext.action
             });
-            MonitorManager.publishEvent({
+
+            logger.info("context content length", {
               type: "plugin-x.event.content",
-              message: `Context content length: ${initialContext.content.length} chars`,
-              logLevel: "info"
+              contextContentLength: initialContext.content.length
             });
 
             // Use the runtime to create a new event
             try {
               await runtime.createEvent(initialContext);
             } catch (eventError) {
-              MonitorManager.publishEvent({
+              logger.error("failed to create event", {
                 type: "plugin-x.event.creation_failed",
-                message: `Failed to create event: ${eventError instanceof Error ? eventError.message : String(eventError)}`,
-                logLevel: "error",
-                metadata: { error: eventError }
+                error: eventError
               });
               throw eventError; // Re-throw to be caught by outer try/catch
             }
 
             // Schedule next post
-            MonitorManager.publishEvent({
-              type: "plugin-x.post.scheduling",
-              message: `Scheduling next X post in ${Math.round(randomIntervalMinutes)} minutes (${Math.round((intervalMs / 1000 / 60 / 60) * 10) / 10} hours)`,
-              logLevel: "info"
-            });
+            logger.info(
+              `Scheduling next X post in ${Math.round(randomIntervalMinutes)} minutes (${Math.round((intervalMs / 1000 / 60 / 60) * 10) / 10} hours)`,
+              {
+                type: "plugin-x.post.scheduling",
+                interval: `${Math.round(randomIntervalMinutes)} minutes`,
+                hours: `${Math.round((intervalMs / 1000 / 60 / 60) * 10) / 10}`
+              }
+            );
             setTimeout(scheduleNextPost, intervalMs);
           } catch (error) {
-            MonitorManager.publishEvent({
+            logger.error("error in periodic post scheduling", {
               type: "plugin-x.post.scheduling_error",
-              message: `Error in periodic post scheduling: ${error instanceof Error ? error.message : String(error)}`,
-              logLevel: "error",
-              metadata: { error }
+              error
             });
 
             // Log internal state details
-            MonitorManager.publishEvent({
-              type: "plugin-x.service.state_check",
-              message: "Checking X Service internal state",
-              logLevel: "info"
+            logger.info("checking X Service internal state", {
+              type: "plugin-x.service.state_check"
             });
             try {
               // Log service health using public methods if available
               try {
                 await xService.checkHealth();
-                MonitorManager.publishEvent({
-                  type: "plugin-x.service.health_check",
-                  message: "X service health check passed",
-                  logLevel: "info"
+                logger.info("x service health check passed", {
+                  type: "plugin-x.service.health_check"
                 });
               } catch (healthError) {
-                MonitorManager.publishEvent({
+                logger.error("x service health check failed", {
                   type: "plugin-x.service.health_check_failed",
-                  message: `X service health check failed: ${healthError instanceof Error ? healthError.message : String(healthError)}`,
-                  logLevel: "error",
-                  metadata: { error: healthError }
+                  error: healthError
                 });
               }
             } catch (authCheckError) {
-              MonitorManager.publishEvent({
+              logger.error("failed to check service state", {
                 type: "plugin-x.service.state_check_failed",
-                message: `Failed to check service state: ${authCheckError instanceof Error ? authCheckError.message : String(authCheckError)}`,
-                logLevel: "error",
-                metadata: { error: authCheckError }
+                error: authCheckError
               });
             }
 
             // If there's an error, still try to schedule the next post
             // but use a shorter interval (30-60 minutes)
             const recoveryMs = (30 + Math.random() * 30) * 60 * 1000;
-            MonitorManager.publishEvent({
-              type: "plugin-x.post.recovery_scheduling",
-              message: `Scheduling recovery attempt in ${Math.round(recoveryMs / 1000 / 60)} minutes`,
-              logLevel: "warn"
-            });
+            logger.warn(
+              `scheduling recovery attempt in ${Math.round(recoveryMs / 1000 / 60)} minutes`,
+              {
+                type: "plugin-x.post.recovery_scheduling",
+                interval: `${Math.round(recoveryMs / 1000 / 60)} minutes`
+              }
+            );
             setTimeout(scheduleNextPost, recoveryMs);
           }
         };
@@ -173,10 +165,9 @@ export function createAllCustomTriggers(
   runtime: Runtime,
   config?: TriggerConfig
 ): Trigger[] {
-  MonitorManager.publishEvent({
+  logger.info("creating all custom triggers", {
     type: "plugin-x.triggers.creating",
-    message: `Creating all custom triggers with config: ${JSON.stringify(config || {})}`,
-    logLevel: "info"
+    config: JSON.stringify(config || {})
   });
   return DEFAULT_X_TRIGGERS.map((factory) =>
     factory(xService, runtime, config)

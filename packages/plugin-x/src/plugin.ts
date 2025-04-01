@@ -2,7 +2,6 @@ import * as path from "path";
 
 import {
   ExecutorImplementation,
-  MonitorManager,
   Plugin,
   Runtime,
   Trigger
@@ -58,17 +57,19 @@ export class XPlugin extends Plugin {
     await super.init(runtime);
 
     // This log confirms that we're being initialized with a valid runtime
-    MonitorManager.publishEvent({
-      type: "plugin-x",
-      message: "plugin x initalizing..."
-    });
+    this.logger.info("plugin x initializing...", { type: "plugin-x" });
 
     // Validate required configuration
     if (!this.config.client_id || !this.config.callback_url) {
-      console.error("❌ X Plugin Error: Missing required configuration");
-      console.error("The X plugin requires at minimum:");
-      console.error("- client_id: Your X API OAuth 2.0 client ID");
-      console.error("- callback_url: Your OAuth callback URL");
+      this.logger.error("❌ x plugin error: missing required configuration", {
+        type: "plugin-x"
+      });
+      this.logger.error(
+        "the x plugin requires at minimum:\n- client_id: Your X API OAuth 2.0 client ID\n- callback_url: Your OAuth callback URL",
+        {
+          type: "plugin-x"
+        }
+      );
 
       // Throw a fatal error instead of just warning
       throw new Error(
@@ -84,8 +85,11 @@ export class XPlugin extends Plugin {
       this.isAuthenticated = await this.xService.checkHealth();
       // If health check fails, force reauthorization
       if (!this.isAuthenticated) {
-        console.warn(
-          "⚠️ Stored authentication token found but failed health check. Token may be invalid or expired."
+        this.logger.warn(
+          "⚠️ stored authentication token found but failed health check. token may be invalid or expired.",
+          {
+            type: "plugin-x"
+          }
         );
         // Remove the invalid token
         await this.tokenStorage.removeToken();
@@ -93,64 +97,61 @@ export class XPlugin extends Plugin {
     }
 
     if (!this.isAuthenticated) {
-      MonitorManager.publishEvent({
-        type: "plugin-x",
-        message: "🔐 X API Authentication Required"
-      });
-      MonitorManager.publishEvent({
-        type: "plugin-x",
-        message:
-          "No valid authentication token found. Starting authentication flow..."
+      this.logger.warn("🔐 x api authentication required", {
+        type: "plugin-x"
       });
 
+      this.logger.warn(
+        "no valid authentication token found. starting authentication flow...",
+        {
+          type: "plugin-x"
+        }
+      );
+
       // Automatically run the authentication flow
-      MonitorManager.publishEvent({
-        type: "plugin-x",
-        message:
-          "You can also manually run authentication at any time with: pnpm maiar-x-login"
-      });
+      this.logger.warn(
+        "you can also manually run authentication at any time with: pnpm maiar-x-login",
+        {
+          type: "plugin-x"
+        }
+      );
 
       try {
         // Run the auth flow with plugin config
         const success = await this.runAuthentication();
 
         if (success) {
-          MonitorManager.publishEvent({
-            type: "plugin-x",
-            message: "Plugin X authenticated successfully"
+          this.logger.info("x plugin authenticated successfully", {
+            type: "plugin-x"
           });
         } else {
-          console.error(
-            "❌ X Plugin authentication failed. Plugin functionality will be limited."
+          this.logger.error(
+            "❌ x plugin authentication failed. plugin functionality will be limited.",
+            {
+              type: "plugin-x"
+            }
           );
-          MonitorManager.publishEvent({
-            type: "plugin-x",
-            message: "❌ X Plugin authentication failed."
-          });
         }
       } catch (error) {
-        console.error("❌ X Plugin authentication error:", error);
-        console.error("You can attempt manual authentication with:");
-        console.error("pnpm maiar-x-login\n");
-        MonitorManager.publishEvent({
-          type: "plugin-x",
-          message: `❌ Plugin X authentication error: ${error}. You can attempt manual authentication with: pnpm maiar-x-login`
-        });
+        this.logger.error(
+          `❌ x plugin authentication error: ${error}. you can attempt manual authentication with: pnpm maiar-x-login`,
+          {
+            type: "plugin-x"
+          }
+        );
         throw error;
       }
     } else {
-      MonitorManager.publishEvent({
-        type: "plugin-x",
-        message: "Plugin X authenticated successfully"
+      this.logger.info("x plugin authenticated successfully", {
+        type: "plugin-x"
       });
     }
 
     // Register executors and triggers now that we have a runtime
     this.registerExecutorsAndTriggers();
 
-    MonitorManager.publishEvent({
-      type: "plugin-x",
-      message: "Plugin X initialized."
+    this.logger.info("x plugin initialized.", {
+      type: "plugin-x"
     });
   }
 
@@ -159,9 +160,8 @@ export class XPlugin extends Plugin {
    * This is separated from init for clarity and is only called after runtime is available
    */
   private registerExecutorsAndTriggers(): void {
-    MonitorManager.publishEvent({
-      type: "plugin-x",
-      message: "Registering X plugin executors and triggers"
+    this.logger.info("registering x plugin executors and triggers", {
+      type: "plugin-x"
     });
 
     // Register executors
@@ -223,10 +223,12 @@ export class XPlugin extends Plugin {
       }
     }
 
-    MonitorManager.publishEvent({
-      type: "plugin-x",
-      message: `Registered ${this.executors.length} executors and ${this.triggers.length} triggers`
-    });
+    this.logger.info(
+      `registered ${this.executors.length} executors and ${this.triggers.length} triggers`,
+      {
+        type: "plugin-x"
+      }
+    );
   }
 
   /**
@@ -258,7 +260,10 @@ export class XPlugin extends Plugin {
 
       return this.isAuthenticated;
     } catch (error) {
-      console.error("Authentication error:", error);
+      this.logger.error("authentication error:", {
+        type: "plugin-x",
+        error: error instanceof Error ? error.message : String(error)
+      });
       return false;
     }
   }
