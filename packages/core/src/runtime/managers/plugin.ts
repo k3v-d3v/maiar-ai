@@ -2,7 +2,6 @@ import { Logger } from "winston";
 
 import logger from "../../lib/logger";
 import { Plugin } from "../providers/plugin";
-import { MonitorManager } from "./monitor";
 
 /**
  * Registry for managing plugins
@@ -27,27 +26,20 @@ export class PluginRegistry {
    */
   public registerPlugin(plugin: Plugin): void {
     if (!plugin.id) {
-      MonitorManager.publishEvent({
+      this.logger.error("plugin ID validation failed", {
         type: "registry.plugin.validation.failed",
-        message: "Plugin ID validation failed",
-        logLevel: "error",
-        metadata: {
-          error: "ID cannot be empty"
-        }
+        error: "ID cannot be empty"
       });
       throw new Error("Plugin ID cannot be empty");
     }
 
     if (this.plugins.has(plugin.id)) {
       const existing = Array.from(this.plugins.keys());
-      MonitorManager.publishEvent({
+      this.logger.error("plugin ID collision", {
         type: "registry.plugin.id.collision",
-        message: "Plugin ID collision",
-        logLevel: "error",
-        metadata: {
-          id: plugin.id,
-          existingPlugins: existing
-        }
+        error: "ID collision",
+        id: plugin.id,
+        existingPlugins: existing
       });
 
       throw new Error(
@@ -65,14 +57,11 @@ export class PluginRegistry {
   public getPlugin(id: string): Plugin | undefined {
     const plugin = this.plugins.get(id);
     if (!plugin) {
-      MonitorManager.publishEvent({
+      this.logger.error("plugin not found", {
         type: "registry.plugin.not_found",
-        message: "Plugin not found",
-        logLevel: "warn",
-        metadata: {
-          id,
-          availablePlugins: Array.from(this.plugins.keys())
-        }
+        error: "Plugin not found",
+        id,
+        availablePlugins: Array.from(this.plugins.keys())
       });
     }
     return plugin;
