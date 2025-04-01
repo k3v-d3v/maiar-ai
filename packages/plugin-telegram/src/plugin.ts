@@ -1,12 +1,6 @@
 import { Telegraf } from "telegraf";
 
-import {
-  AgentContext,
-  MonitorManager,
-  Plugin,
-  PluginResult,
-  Runtime
-} from "@maiar-ai/core";
+import { AgentContext, Plugin, PluginResult, Runtime } from "@maiar-ai/core";
 
 import { generateResponseTemplate } from "./templates";
 import {
@@ -74,7 +68,7 @@ export class TelegramPlugin extends Plugin {
     }
   }
 
-  async init(runtime: Runtime): Promise<void> {
+  public async init(runtime: Runtime): Promise<void> {
     await super.init(runtime);
 
     this.bot.use(async (ctx, next) => {
@@ -86,13 +80,9 @@ export class TelegramPlugin extends Plugin {
 
     // Log all bot errors
     this.bot.catch((error) => {
-      MonitorManager.publishEvent({
+      this.logger.error("telegram bot error", {
         type: "telegram.bot.error",
-        message: "Bot error",
-        logLevel: "error",
-        metadata: {
-          error: error instanceof Error ? error.message : String(error)
-        }
+        error: error instanceof Error ? error.message : String(error)
       });
     });
 
@@ -104,24 +94,16 @@ export class TelegramPlugin extends Plugin {
 
     // Launch bot without awaiting to prevent blocking
     this.bot.launch(pollingOptions).catch((error) => {
-      MonitorManager.publishEvent({
+      this.logger.error("failed to start bot", {
         type: "telegram.bot.launch.error",
-        message: "Failed to start bot",
-        logLevel: "error",
-        metadata: {
-          error: error instanceof Error ? error.message : String(error),
-          pollingOptions
-        }
+        error: error instanceof Error ? error.message : String(error),
+        pollingOptions
       });
     });
 
-    MonitorManager.publishEvent({
+    this.logger.info("bot started with polling", {
       type: "telegram.bot.start",
-      message: "Bot started with polling",
-      logLevel: "info",
-      metadata: {
-        options: pollingOptions
-      }
+      options: pollingOptions
     });
   }
 
