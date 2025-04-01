@@ -1,5 +1,7 @@
+import { Logger } from "winston";
 import { z } from "zod";
 
+import logger from "../../lib/logger";
 import { ICapabilities } from "../managers/model/capability/types";
 import { MonitorManager } from "../managers/monitor";
 import { OperationConfig } from "../pipeline/operations";
@@ -34,6 +36,10 @@ export abstract class ModelProvider {
   public readonly name: string;
   public readonly description: string;
   public readonly capabilities: Map<string, ModelCapability>;
+
+  public get logger(): Logger {
+    return logger.child({ scope: `model.provider.${this.id}` });
+  }
 
   constructor(id: string, name: string, description: string) {
     this.id = id;

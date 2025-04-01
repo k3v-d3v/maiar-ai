@@ -1,4 +1,7 @@
+import { Logger } from "winston";
+
 import { Runtime } from "../";
+import logger from "../../lib/logger";
 import { MonitorManager } from "../managers";
 import { ICapabilities } from "../managers/model/capability/types";
 import { AgentContext } from "../pipeline/agent";
@@ -42,6 +45,10 @@ export abstract class Plugin {
   private executorImplementations: ExecutorImplementation[];
   private triggerImplementations: Trigger[];
   private _runtime: Runtime | undefined;
+
+  public get logger(): Logger {
+    return logger.child({ scope: `plugin.${this.id}` });
+  }
 
   constructor({
     id,

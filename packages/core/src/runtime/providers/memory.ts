@@ -1,3 +1,6 @@
+import { Logger } from "winston";
+
+import logger from "../../lib/logger";
 import { MonitorManager } from "../managers/monitor";
 import { Plugin } from "../providers/plugin";
 
@@ -40,6 +43,10 @@ export abstract class MemoryProvider {
   public readonly id: string;
   public readonly name: string;
   public readonly description: string;
+
+  public get logger(): Logger {
+    return logger.child({ scope: "memory.provider" });
+  }
 
   constructor({
     id,
