@@ -1,10 +1,11 @@
+import { Logger, LoggerOptions } from "winston";
 import { z } from "zod";
 
+import logger from "../lib/logger";
 import { MemoryManager } from "./managers/memory";
 import { ModelManager } from "./managers/model";
 import { TEXT_GENERATION_CAPABILITY } from "./managers/model/capability/constants";
 import { ICapabilities } from "./managers/model/capability/types";
-import { MonitorManager } from "./managers/monitor";
 import { PluginRegistry } from "./managers/plugin";
 import {
   AgentContext,
@@ -15,7 +16,6 @@ import {
 } from "./pipeline/agent";
 import { formatZodSchema, OperationConfig } from "./pipeline/operations";
 import {
-  cleanJsonString,
   extractJson,
   generateObjectTemplate,
   generatePipelineModificationTemplate,
@@ -25,7 +25,6 @@ import {
 import {
   ContextItemWithHistory,
   ErrorContextItem,
-  GetObjectConfig,
   Pipeline,
   PipelineGenerationContext,
   PipelineModification,
@@ -36,102 +35,20 @@ import {
 } from "./pipeline/types";
 import { MemoryProvider } from "./providers/memory";
 import { ModelProvider, ModelRequestConfig } from "./providers/model";
-import { MonitorProvider } from "./providers/monitor";
 import { Plugin } from "./providers/plugin";
 
 const REQUIRED_CAPABILITIES = [TEXT_GENERATION_CAPABILITY];
 
-export async function getObject<T extends z.ZodType>(
-  modelManager: ModelManager,
-  schema: T,
-  prompt: string,
-  config?: GetObjectConfig
-): Promise<z.infer<T>> {
-  const maxRetries = config?.maxRetries ?? 3;
-  let lastError: Error | null = null;
-  let lastResponse: string | null = null;
-
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      // Generate prompt using template
-      const fullPrompt: string =
-        attempt === 0
-          ? generateObjectTemplate({
-              schema: formatZodSchema(schema),
-              prompt
-            })
-          : generateRetryTemplate({
-              schema: formatZodSchema(schema),
-              prompt,
-              lastResponse: lastResponse!,
-              error: lastError!.message
-            });
-      const response = await modelManager.executeCapability(
-        "text-generation",
-        fullPrompt,
-        config
-      );
-      lastResponse = response;
-
-      // Extract JSON from the response, handling code blocks and extra text
-      const jsonString = cleanJsonString(extractJson(response));
-
-      try {
-        const parsed = JSON.parse(jsonString);
-        const result = schema.parse(parsed);
-        if (attempt > 0) {
-          MonitorManager.publishEvent({
-            type: "runtime.getObject.success.retry",
-            message: "Successfully parsed JSON after retries",
-            logLevel: "info",
-            metadata: { attempts: attempt + 1 }
-          });
-        }
-        return result;
-      } catch (parseError) {
-        lastError = parseError as Error;
-        MonitorManager.publishEvent({
-          type: "runtime.getObject.parse.failed",
-          message: `Attempt ${attempt + 1}/${maxRetries} failed`,
-          logLevel: "warn",
-          metadata: {
-            error: parseError,
-            response: jsonString
-          }
-        });
-        if (attempt === maxRetries - 1) throw parseError;
-      }
-    } catch (error) {
-      lastError = error as Error;
-      MonitorManager.publishEvent({
-        type: "runtime.getObject.execution.failed",
-        message: `Attempt ${attempt + 1}/${maxRetries} failed`,
-        logLevel: "error",
-        metadata: {
-          prompt,
-          schema: schema.description,
-          config,
-          error,
-          lastResponse
-        }
-      });
-      if (attempt === maxRetries - 1) throw error;
-    }
-  }
-
-  // This should never happen due to the throw in the loop
-  throw new Error("Failed to get valid response after retries");
-}
-
 /**
- * Runtime class that manages the execution of plugins and agent state
+ * Manages the lifecycle of the MAIAR runtime, including its core components:
+ * - Model manager: Handles registered model providers and their capabilities.
+ * - Memory manager: Manages the registered memory store.
+ * - Plugin registry: Oversees registered plugins.
+ * - Pipeline: Enables AI agentic behavior by orchestrating models, memory, and plugins.
  */
 export class Runtime {
-  public readonly operations; // operations that can be used by plugins
-
   private modelManager: ModelManager;
   private memoryManager: MemoryManager;
-  private monitorManager: typeof MonitorManager;
   private pluginRegistry: PluginRegistry;
 
   private isRunning: boolean;
@@ -139,29 +56,41 @@ export class Runtime {
   private queueInterface: EventQueue;
   private currentContext: AgentContext | undefined;
 
+  /**
+   * Returns a logger instance for the runtime used during initialization
+   */
+  private static get logger(): Logger {
+    return logger.child({ type: "runtime.init" });
+  }
+
+  /**
+   * Returns the memory manager instance for the runtime
+   */
+  public get memory(): MemoryManager {
+    return this.memoryManager;
+  }
+
+  /**
+   * Returns the logger instance for the runtime
+   */
+  public get logger(): Logger {
+    return logger.child({ type: "runtime" });
+  }
+
+  /**
+   * Returns the current context
+   */
+  public get context(): AgentContext | undefined {
+    return this.currentContext;
+  }
+
   private constructor(
     modelManager: ModelManager,
     memoryManager: MemoryManager,
-    monitorManager: typeof MonitorManager,
     pluginRegistry: PluginRegistry
   ) {
-    this.operations = {
-      getObject: <T extends z.ZodType<unknown>>(
-        schema: T,
-        prompt: string,
-        config?: OperationConfig
-      ) => getObject(modelManager, schema, prompt, config),
-      executeCapability: <K extends keyof ICapabilities>(
-        capabilityId: K,
-        input: ICapabilities[K]["input"],
-        config?: OperationConfig,
-        modelId?: string
-      ) => modelManager.executeCapability(capabilityId, input, config, modelId)
-    };
-
     this.modelManager = modelManager;
     this.memoryManager = memoryManager;
-    this.monitorManager = monitorManager;
     this.pluginRegistry = pluginRegistry;
 
     this.isRunning = false;
@@ -171,16 +100,11 @@ export class Runtime {
         const userInput = getUserInput(context);
 
         // Pre-event logging and store user message
-        this.monitor.publishEvent({
-          type: "runtime.context.pre_event",
-          message: "Pre-event context chain state",
-          logLevel: "info",
-          metadata: {
-            phase: "pre-event",
-            user: userInput?.user,
-            message: userInput?.rawMessage,
-            contextChain: context.contextChain
-          }
+        this.logger.info("pre-event context chain state", {
+          phase: "pre-event",
+          user: userInput?.user,
+          message: userInput?.rawMessage,
+          contextChain: context.contextChain
         });
 
         // Get conversation history if user input exists
@@ -214,16 +138,11 @@ export class Runtime {
         try {
           // Store user message in memory
           if (userInput) {
-            this.monitor.publishEvent({
-              type: "runtime.memory.user_message.storing",
-              message: "Storing user message in memory",
-              logLevel: "info",
-              metadata: {
-                user: userInput.user,
-                platform: userInput.pluginId,
-                message: userInput.rawMessage,
-                messageId: userInput.id
-              }
+            this.logger.info("storing user message in memory", {
+              user: userInput.user,
+              platform: userInput.pluginId,
+              message: userInput.rawMessage,
+              messageId: userInput.id
             });
             await this.memoryManager.storeUserInteraction(
               userInput.user,
@@ -240,46 +159,32 @@ export class Runtime {
             fullContext.platformContext.responseHandler = async (response) => {
               try {
                 // Pre-response logging
-                this.monitor.publishEvent({
-                  type: "runtime.context.pre_response",
-                  message: "Pre-response context chain state",
-                  logLevel: "info",
-                  metadata: {
-                    phase: "pre-response",
-                    platform: userInput?.pluginId,
-                    user: userInput?.user,
-                    contextChain: this.context?.contextChain,
-                    response
-                  }
+                this.logger.info("pre-response context chain state", {
+                  phase: "pre-response",
+                  platform: userInput?.pluginId,
+                  user: userInput?.user,
+                  contextChain: this.context?.contextChain,
+                  response
                 });
 
                 // Original response handler
                 await originalHandler(response);
 
                 // Post-response logging
-                this.monitor.publishEvent({
-                  type: "runtime.context.post_response",
-                  message: "Post-response context chain state",
-                  logLevel: "info",
-                  metadata: {
-                    phase: "post-response",
-                    platform: userInput?.pluginId,
-                    user: userInput?.user,
-                    contextChain: this.context?.contextChain,
-                    response
-                  }
+                this.logger.info("post-response context chain state", {
+                  phase: "post-response",
+                  platform: userInput?.pluginId,
+                  user: userInput?.user,
+                  contextChain: this.context?.contextChain,
+                  response
                 });
-              } catch (error) {
-                this.monitor.publishEvent({
-                  type: "runtime.response.storing.failed",
-                  message: "Error storing assistant response",
-                  logLevel: "error",
-                  metadata: {
-                    error:
-                      error instanceof Error ? error.message : String(error),
-                    user: userInput?.user,
-                    platform: userInput?.pluginId
-                  }
+              } catch (err: unknown) {
+                const error =
+                  err instanceof Error ? err : new Error(String(err));
+                this.logger.error("error storing assistant response", {
+                  error: error.message,
+                  user: userInput?.user,
+                  platform: userInput?.pluginId
                 });
                 throw error;
               }
@@ -287,24 +192,15 @@ export class Runtime {
           }
 
           this.eventQueue.push(fullContext);
-          this.monitor.publishEvent({
-            type: "runtime.queue.updated",
-            message: "Queue updated",
-            logLevel: "debug",
-            metadata: {
-              queueLength: this.eventQueue.length
-            }
+          this.logger.debug("queue updated", {
+            queueLength: this.eventQueue.length
           });
-        } catch (error) {
-          MonitorManager.publishEvent({
-            type: "runtime.message.storing.failed",
-            message: "Error storing user message",
-            logLevel: "error",
-            metadata: {
-              error: error instanceof Error ? error.message : String(error),
-              user: userInput?.user,
-              platform: userInput?.pluginId
-            }
+        } catch (err: unknown) {
+          const error = err instanceof Error ? err : new Error(String(err));
+          this.logger.error("error storing user message", {
+            error: error.message,
+            user: userInput?.user,
+            platform: userInput?.pluginId
           });
           throw error;
         }
@@ -316,171 +212,163 @@ export class Runtime {
     this.currentContext = undefined;
   }
 
+  /**
+   * Initializes a new Runtime instance with the provided configuration
+   * @param {Object} config - Configuration object
+   * @param {ModelProvider[]} config.modelProviders - Array of model providers to register
+   * @param {MemoryProvider} config.memoryProvider - Memory provider instance
+   * @param {Plugin[]} config.plugins - Array of plugins to register
+   * @param {string[][]} config.capabilityAliases - Array of capability alias mappings
+   * @param {Object} [config.options] - Optional configuration settings
+   * @param {LoggerOptions} [config.options.logger] - Logger options
+   * @param {number} [config.options.timeout] - Startup timeout in seconds
+   * @returns {Promise<Runtime>} Initialized Runtime instance
+   */
   public static async init({
     modelProviders,
     memoryProvider,
-    monitorProviders,
     plugins,
-    capabilityAliases
+    capabilityAliases,
+    options
   }: {
     modelProviders: ModelProvider[];
     memoryProvider: MemoryProvider;
-    monitorProviders: MonitorProvider[];
     plugins: Plugin[];
     capabilityAliases: string[][];
+    options?: {
+      logger?: LoggerOptions;
+      timeout?: number;
+    };
   }): Promise<Runtime> {
-    await MonitorManager.init(...monitorProviders);
-    await MonitorManager.checkHealth();
-    const monitorManager = MonitorManager;
+    if (options && options.logger) {
+      logger.configure(options.logger);
+    }
 
-    const modelManager = new ModelManager(...modelProviders);
+    if (options && options.timeout) {
+      for (let i = 0; i < options.timeout; i++) {
+        console.log(
+          "waiting to start runtime for",
+          options.timeout - i,
+          "second(s)..."
+        );
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+      console.log("done waiting");
+    }
+
+    this.logger.info(`       
+███╗   ███╗ █████╗ ██╗ █████╗ ██████╗ 
+████╗ ████║██╔══██╗██║██╔══██╗██╔══██╗
+██╔████╔██║███████║██║███████║██████╔╝
+██║╚██╔╝██║██╔══██║██║██╔══██║██╔══██╗
+██║ ╚═╝ ██║██║  ██║██║██║  ██║██║  ██║
+╚═╝     ╚═╝╚═╝  ╚═╝╚═╝╚═╝  ╚═╝╚═╝  ╚═╝
+by Uranium Corporation
+    `);
+    this.logger.info("runtime initializing...");
+
+    const modelManager = new ModelManager()
+      .registerModelProviders(...modelProviders)
+      .registerCapabilityAliases(capabilityAliases);
     await modelManager.init();
     await modelManager.checkHealth();
-
-    const memoryManager = new MemoryManager(memoryProvider);
-    const pluginRegistry = new PluginRegistry(...plugins);
-
-    // Add capability aliases to the model manager
-    for (const aliasGroup of capabilityAliases) {
-      const canonicalId =
-        aliasGroup.find((id) => modelManager.hasCapability(id)) ??
-        (aliasGroup[0] as string);
-
-      // Register all other IDs in the group as aliases to the canonical ID
-      for (const alias of aliasGroup) {
-        if (alias !== canonicalId) {
-          modelManager.registerCapabilityAlias(alias, canonicalId);
-        }
-      }
-    }
 
     // Check if model manager has at least 1 model provider with the required capabilities needed for the runtime
     for (const capability of REQUIRED_CAPABILITIES) {
       if (!modelManager.hasCapability(capability)) {
-        MonitorManager.publishEvent({
-          type: "runtime.required.capabilities.check.failed",
-          message: `${capability} capability by a model provider is required for core runtime operations`,
-          logLevel: "error"
+        const error = `${capability} capability by a model provider is required for core runtime operations`;
+        this.logger.error(error, {
+          modelProviders: modelProviders.map((p) => p.getCapabilities()),
+          runtimeRequiredCapabilities: REQUIRED_CAPABILITIES
         });
-        throw new Error(
-          `${capability} capability by a model provider is required for core runtime operations`
-        );
+        throw new Error(error);
       }
     }
 
-    MonitorManager.publishEvent({
-      type: "runtime.required.capabilities.check.success",
-      message:
-        "runtime's required capabilities by at least 1 model provider check passed successfully",
-      logLevel: "info"
-    });
+    this.logger.debug(
+      "runtime's required capabilities by at least 1 model provider check passed successfully",
+      {
+        availableCapabilities: modelManager.getAvailableCapabilities(),
+        runtimeRequiredCapabilities: REQUIRED_CAPABILITIES
+      }
+    );
+
+    const memoryManager = new MemoryManager(memoryProvider);
+    await memoryManager.init();
+    await memoryManager.checkHealth();
+
+    const pluginRegistry = new PluginRegistry().registerPlugins(...plugins);
+    await pluginRegistry.init();
 
     // Validate all plugins have required capabilities implemented in the model manager
     for (const plugin of pluginRegistry.getAllPlugins()) {
       for (const capability of plugin.requiredCapabilities) {
         if (!modelManager.hasCapability(capability)) {
-          MonitorManager.publishEvent({
-            type: "runtime.plugin.capability.missing",
-            message: `plugin ${plugin.id} specified a required capability ${capability} that is not available`,
-            logLevel: "warn"
-          });
-
-          throw new Error(
-            `Plugin ${plugin.id} requires capability ${capability} but it is not available`
-          );
+          const error = `plugin ${plugin.id} specified a required capability ${capability} that is not available`;
+          this.logger.error(error);
+          throw new Error(error);
         }
       }
     }
 
-    MonitorManager.publishEvent({
-      type: "plugins.required.capabilities.check.success",
-      message:
-        "runtime has all model providers with required capabilities by plugins",
-      logLevel: "info"
-    });
-
-    MonitorManager.publishEvent({
-      type: "runtime.init",
-      message: "runtime initialized succesfully",
-      metadata: {
-        modelProviders: modelProviders.map((p) => p.id),
-        capabilities: modelManager.getAvailableCapabilities(),
-        memoryProvider: memoryProvider.id,
-        monitorProviders: monitorProviders.map((p) => p.id),
-        plugins: plugins.map((p) => ({
-          id: p.id,
-          name: p.name,
-          description: p.description,
-          requiredCapabilities: p.requiredCapabilities,
-          triggers: p.triggers.map((t) => ({
-            id: t.id
-          })),
-          execuctors: p.executors.map((e) => ({
-            name: e.name,
-            description: e.description
-          }))
+    this.logger.debug(
+      "runtime has all model providers with required capabilities by plugins",
+      {
+        availableCapabilities: modelManager.getAvailableCapabilities(),
+        pluginsRequiredCapabilities: plugins.map((p) => ({
+          pluginId: p.id,
+          requiredCapabilities: p.requiredCapabilities
         }))
       }
+    );
+
+    this.logger.info("runtime initialized succesfully", {
+      modelProviders: modelProviders.map((p) => p.id),
+      availableCapabilities: modelManager.getAvailableCapabilities(),
+      memoryProvider: memoryProvider.id,
+      plugins: plugins.map((p) => ({
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        requiredCapabilities: p.requiredCapabilities,
+        triggers: p.triggers.map((t) => ({
+          id: t.id
+        })),
+        executors: p.executors.map((e) => ({
+          name: e.name,
+          description: e.description
+        }))
+      }))
     });
 
-    return new Runtime(
-      modelManager,
-      memoryManager,
-      monitorManager,
-      pluginRegistry
-    );
+    return new Runtime(modelManager, memoryManager, pluginRegistry);
   }
 
   /**
-   * Access to the memory manager for plugins
-   */
-  public get memory(): MemoryManager {
-    return this.memoryManager;
-  }
-
-  /**
-   * Access to the monitor manager for plugins
-   */
-  public get monitor(): typeof MonitorManager {
-    return this.monitorManager;
-  }
-
-  /**
-   * Access to the current context
-   */
-  public get context(): AgentContext | undefined {
-    return this.currentContext;
-  }
-
-  /**
-   * Start the runtime
+   * Starts the runtime:
+   * - Starts all plugins' triggers
+   * - Starts a loop that processes events from the plugins' triggers
+   * @returns {Promise<void>}
+   * @throws {Error} If runtime fails to start or encounters an error during execution
    */
   public async start(): Promise<void> {
-    if (this.isRunning) {
-      return;
-    }
+    if (this.isRunning) return;
 
     this.isRunning = true;
 
-    MonitorManager.publishEvent({
-      type: "runtime.start",
-      message: "runtime started",
-      logLevel: "info"
-    });
+    this.logger.info("ai agent (powered by $MAIAR) runtime started");
 
     for (const plugin of this.pluginRegistry.getAllPlugins()) {
-      plugin.init(this);
+      plugin._setRuntime(this);
 
       for (const trigger of plugin.triggers) {
-        MonitorManager.publishEvent({
-          type: "runtime.plugin.trigger.start",
-          message: `plugin id "${plugin.id}" trigger "${trigger.id}" starting...`,
-          logLevel: "info",
-          metadata: {
-            trigger: trigger.id,
-            plugin: plugin.id
+        this.logger.info(
+          `invoking ai agent's plugin id "${plugin.id}" trigger "${trigger.id}" start()...`,
+          {
+            pluginId: plugin.id,
+            triggerId: trigger.id
           }
-        });
+        );
 
         const initContext: UserInputContext = {
           id: `${plugin.id}-trigger-${Date.now()}`,
@@ -512,22 +400,19 @@ export class Runtime {
   }
 
   /**
-   * Stop the runtime
+   * Stops the runtime and ceases processing of events
+   * @returns {Promise<void>}
+   * @throws {Error} If runtime is not currently running
    */
   public async stop(): Promise<void> {
     if (!this.isRunning) throw new Error("Runtime is not running");
-
     this.isRunning = false;
-
-    // Log stop event
-    MonitorManager.publishEvent({
-      type: "runtime.stop",
-      message: "Runtime stopped"
-    });
+    this.logger.info("ai agent (powered by $MAIAR) runtime stopped");
   }
 
   /**
    * Get all registered plugins
+   * @returns {Plugin[]} All registered plugins
    */
   public getPlugins(): Plugin[] {
     return this.pluginRegistry.getAllPlugins();
@@ -535,13 +420,15 @@ export class Runtime {
 
   /**
    * Push a new context to the event queue
+   * @param {AgentContext} context - The context to push to the event queue
    */
   public pushContext(context: AgentContext): void {
     this.eventQueue.push(context);
   }
 
   /**
-   * Context management methods for plugins
+   * Adds a new item to the context chain
+   * @param {BaseContextItem} item - The item to add to the context chain
    */
   public pushToContextChain(item: BaseContextItem): void {
     if (this.context) {
@@ -564,6 +451,12 @@ export class Runtime {
     }
   }
 
+  /**
+   * Creates an event from a user input context
+   * @param {UserInputContext} initialContext - The initial context to create the event from
+   * @param {AgentContext["platformContext"]} [platformContext] - Optional platform context
+   * @returns {Promise<void>}
+   */
   public async createEvent(
     initialContext: UserInputContext,
     platformContext?: AgentContext["platformContext"]
@@ -583,152 +476,103 @@ export class Runtime {
     };
     try {
       await this.queueInterface.push(context);
-    } catch (error) {
-      MonitorManager.publishEvent({
-        type: "runtime.event.queue.push.failed",
-        message: "Error pushing event to queue",
-        logLevel: "error",
-        metadata: {
-          error: error instanceof Error ? error.message : String(error),
-          context: {
-            platform: initialContext.pluginId,
-            message: initialContext.rawMessage,
-            user: initialContext.user
-          }
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.logger.error("error pushing event to queue", {
+        error: error.message,
+        context: {
+          platform: initialContext.pluginId,
+          message: initialContext.rawMessage,
+          user: initialContext.user
         }
       });
       throw error; // Re-throw to allow caller to handle
     }
   }
 
+  /**
+   * Runs the evaluation loop:
+   * - Retrieves events from the event queue
+   * - Evaluates the pipeline for each event
+   * - Executes the pipeline
+   * @returns {Promise<void>}
+   */
   private async runEvaluationLoop(): Promise<void> {
-    MonitorManager.publishEvent({
-      type: "runtime.evaluation.loop.starting",
-      message: "Starting evaluation loop",
-      logLevel: "info"
-    });
+    this.logger.info("evaluation loop started...");
 
     while (this.isRunning) {
-      const context = await this.eventQueue.shift();
+      const context = this.eventQueue.shift();
       if (!context) {
         await new Promise((resolve) => setTimeout(resolve, 100)); // Sleep to prevent busy loop
         continue;
       }
 
-      const userInput = getUserInput(context);
-      MonitorManager.publishEvent({
-        type: "runtime.context.processing",
-        message: "Processing context from queue",
-        logLevel: "debug",
-        metadata: {
-          context: {
-            platform: userInput?.pluginId,
-            message: userInput?.rawMessage,
-            queueLength: this.eventQueue.length
-          }
-        }
+      const userInput = getUserInput(context) as UserInputContext;
+      this.logger.info("received context from queue", {
+        platform: userInput.pluginId,
+        message: userInput.rawMessage,
+        queueLength: this.eventQueue.length
       });
 
       try {
         // Set current context before pipeline
         this.currentContext = context;
 
-        MonitorManager.publishEvent({
-          type: "runtime.pipeline.evaluating",
-          message: "Evaluating pipeline for context",
-          logLevel: "debug"
-        });
+        this.logger.info("evaluating pipeline for context");
 
         const pipeline = await this.evaluatePipeline(context);
-        MonitorManager.publishEvent({
-          type: "runtime.pipeline.generated",
-          message: "Generated pipeline",
-          logLevel: "info",
-          metadata: { pipeline }
-        });
+        this.logger.info("generated pipeline", { pipeline });
 
-        MonitorManager.publishEvent({
-          type: "runtime.pipeline.executing",
-          message: "Executing pipeline",
-          logLevel: "debug"
-        });
-
+        this.logger.info("executing pipeline...");
         await this.executePipeline(pipeline, context);
 
         // Post-event logging
-        MonitorManager.publishEvent({
-          type: "runtime.context.post_event",
-          message: "Post-event context chain state",
-          logLevel: "info",
-          metadata: {
-            phase: "post-event",
-            platform: userInput?.pluginId,
-            user: userInput?.user,
-            contextChain: context.contextChain
-          }
+        this.logger.info("post-event context chain state", {
+          platform: userInput.pluginId,
+          user: userInput.user,
+          contextChain: context.contextChain
         });
 
         // Store agent message and context in memory with complete context chain
-        if (userInput) {
-          const lastContext = context.contextChain[
-            context.contextChain.length - 1
-          ] as BaseContextItem & { message: string };
-          MonitorManager.publishEvent({
-            type: "runtime.assistant.response.storing",
-            message: "Storing assistant response in memory",
-            logLevel: "info",
-            metadata: {
-              user: userInput.user,
-              platform: userInput.pluginId,
-              response: lastContext.message
-            }
-          });
-
-          await this.memoryManager.storeAssistantInteraction(
-            userInput.user,
-            userInput.pluginId,
-            lastContext.message,
-            context.contextChain
-          );
-        }
-
-        MonitorManager.publishEvent({
-          type: "runtime.pipeline.execution.complete",
-          message: "Pipeline execution complete",
-          logLevel: "info"
-        });
-      } catch (error) {
-        MonitorManager.publishEvent({
-          type: "runtime.evaluation.loop.error",
-          message: "Error in evaluation loop",
-          logLevel: "error",
-          metadata: {
-            error: error instanceof Error ? error : new Error(String(error)),
-            context: {
-              message: userInput?.rawMessage,
-              platform: userInput?.pluginId,
-              user: userInput?.user
-            }
-          }
+        const lastContext = context.contextChain[
+          context.contextChain.length - 1
+        ] as BaseContextItem & { message: string };
+        this.logger.info("storing assistant response in memory", {
+          user: userInput.user,
+          platform: userInput.pluginId,
+          response: lastContext.message
         });
 
-        // Log the error
-        await MonitorManager.publishEvent({
-          type: "runtime_error",
-          message: `Runtime error occurred`,
-          metadata: {
-            error: error instanceof Error ? error.message : String(error)
-          }
+        await this.memoryManager.storeAssistantInteraction(
+          userInput.user,
+          userInput.pluginId,
+          lastContext.message,
+          context.contextChain
+        );
+
+        this.logger.info("pipeline execution complete");
+      } catch (err: unknown) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        this.logger.info("error in evaluation loop", {
+          error: error.message,
+          message: userInput.rawMessage,
+          platform: userInput.pluginId,
+          user: userInput.user
         });
+
         throw error;
       } finally {
         // Clear current context after execution
         this.currentContext = undefined;
-        await this.updateMonitoringState();
       }
     }
   }
 
+  /**
+   * Evaluates the pipeline for a given context
+   * @param {AgentContext} context - The context to evaluate the pipeline for
+   * @returns {Promise<Pipeline>} The evaluated pipeline
+   */
   private async evaluatePipeline(context: AgentContext): Promise<Pipeline> {
     // Store the context in history if it's user input
     const userInput = getUserInput(context);
@@ -780,129 +624,79 @@ export class Runtime {
       const template = generatePipelineTemplate(pipelineContext);
 
       // Log pipeline generation start
-      MonitorManager.publishEvent({
-        type: "pipeline.generation.start",
-        message: "Starting pipeline generation",
-        metadata: {
-          platform,
-          message,
-          template
-        }
+      this.logger.info("starting pipeline generation", {
+        platform,
+        message,
+        template
       });
 
-      MonitorManager.publishEvent({
-        type: "runtime.pipeline.generating",
-        message: "Generating pipeline",
-        logLevel: "debug",
-        metadata: {
-          context: pipelineContext,
-          template,
-          contextChain: context.contextChain
-        }
-      });
-
-      const pipeline = await this.operations.getObject(
-        PipelineSchema,
+      this.logger.debug("generating pipeline", {
+        context: pipelineContext,
         template,
-        {
-          temperature: 0.2 // Lower temperature for more predictable outputs
-        }
-      );
+        contextChain: context.contextChain
+      });
+
+      const pipeline = await this.getObject(PipelineSchema, template, {
+        temperature: 0.2 // Lower temperature for more predictable outputs
+      });
 
       // Add concise pipeline steps log
       const steps = pipeline.map((step) => `${step.pluginId}:${step.action}`);
-      MonitorManager.publishEvent({
-        type: "runtime.pipeline.steps",
-        message: "Pipeline steps:",
-        logLevel: "info",
-        metadata: { steps }
-      });
+      this.logger.info("pipeline steps", { steps });
 
       // Log successful pipeline generation
-      MonitorManager.publishEvent({
-        type: "pipeline.generation.complete",
-        message: "Pipeline generation completed successfully",
-        metadata: {
-          platform,
-          message,
-          template,
-          pipeline,
-          steps
-        }
+      this.logger.info("pipeline generation complete", {
+        platform,
+        message,
+        template,
+        pipeline,
+        steps
       });
 
-      MonitorManager.publishEvent({
-        type: "runtime.pipeline.generated",
-        message: "Generated pipeline",
-        logLevel: "info",
-        metadata: {
-          pipeline
-        }
-      });
+      this.logger.info("generated pipeline", { pipeline });
 
       return pipeline;
-    } catch (error) {
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+
       // Log pipeline generation error
-      MonitorManager.publishEvent({
-        type: "pipeline.generation.error",
-        message: "Pipeline generation failed",
-        metadata: {
-          platform,
-          message,
-          error:
-            error instanceof Error
-              ? {
-                  name: error.name,
-                  message: error.message,
-                  stack: error.stack
-                }
-              : error,
-          template: generatePipelineTemplate(pipelineContext)
-        }
+      this.logger.error("pipeline generation failed", {
+        platform,
+        message,
+        error,
+        template: generatePipelineTemplate(pipelineContext)
       });
 
-      MonitorManager.publishEvent({
-        type: "runtime.pipeline.generation.error",
-        message: "Error generating pipeline",
-        logLevel: "error",
-        metadata: {
-          error:
-            error instanceof Error
-              ? {
-                  name: error.name,
-                  message: error.message,
-                  stack: error.stack
-                }
-              : error,
-          context: {
-            platform: userInput?.pluginId || "unknown",
-            message: userInput?.rawMessage || "",
-            contextChain: context.contextChain,
-            generationContext: pipelineContext,
-            template: generatePipelineTemplate(pipelineContext)
-          }
-        }
+      this.logger.error("error generating pipeline", {
+        error: error.message,
+        platform: userInput?.pluginId || "unknown",
+        message: userInput?.rawMessage || "",
+        contextChain: context.contextChain,
+        generationContext: pipelineContext,
+        template: generatePipelineTemplate(pipelineContext)
       });
-      return []; // Return empty pipeline on error
+
+      // Return empty pipeline on error
+      return [];
     }
   }
 
+  /**
+   * Evaluates the pipeline modification for a given context
+   * @param {PipelineModificationContext} context - The context to evaluate the pipeline modification for
+   * @returns {Promise<PipelineModification>} The evaluated pipeline modification
+   */
   private async evaluatePipelineModification(
     context: PipelineModificationContext
   ): Promise<PipelineModification> {
     const template = generatePipelineModificationTemplate(context);
-    MonitorManager.publishEvent({
-      type: "runtime.pipeline.modification.evaluating",
-      message: "Evaluating pipeline modification",
-      logLevel: "debug",
-      metadata: {
-        context,
-        template
-      }
+    this.logger.debug("evaluating pipeline modification", {
+      context,
+      template
     });
 
     try {
-      const modification = await this.operations.getObject(
+      const modification = await this.getObject(
         PipelineModificationSchema,
         template,
         {
@@ -910,26 +704,17 @@ export class Runtime {
         }
       );
 
-      MonitorManager.publishEvent({
-        type: "runtime.pipeline.modification.result",
-        message: "Pipeline modification evaluation result",
-        logLevel: "info",
-        metadata: {
-          shouldModify: modification.shouldModify,
-          explanation: modification.explanation,
-          modifiedSteps: modification.modifiedSteps
-        }
+      this.logger.info("pipeline modification evaluation result", {
+        shouldModify: modification.shouldModify,
+        explanation: modification.explanation,
+        modifiedSteps: modification.modifiedSteps
       });
 
       return modification;
-    } catch (error) {
-      MonitorManager.publishEvent({
-        type: "runtime.pipeline.modification.error",
-        message: "Error evaluating pipeline modification",
-        logLevel: "error",
-        metadata: {
-          error: error instanceof Error ? error : new Error(String(error))
-        }
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.logger.error("error evaluating pipeline modification", {
+        error: error.message
       });
       return {
         shouldModify: false,
@@ -939,6 +724,12 @@ export class Runtime {
     }
   }
 
+  /**
+   * Executes a pipeline
+   * @param {PipelineStep[]} pipeline - The pipeline to execute
+   * @param {AgentContext} context - The context to execute the pipeline in
+   * @returns {Promise<void>}
+   */
   private async executePipeline(
     pipeline: PipelineStep[],
     context: AgentContext
@@ -950,16 +741,11 @@ export class Runtime {
       let currentStepIndex = 0;
 
       // Log initial pipeline state
-      MonitorManager.publishEvent({
-        type: "runtime.pipeline.state",
-        message: "Pipeline state updated",
-        logLevel: "debug",
-        metadata: {
-          currentPipeline,
-          currentStepIndex,
-          pipelineLength: currentPipeline.length,
-          contextChain: context.contextChain
-        }
+      this.logger.debug("pipeline state updated", {
+        currentPipeline,
+        currentStepIndex,
+        pipelineLength: currentPipeline.length,
+        contextChain: context.contextChain
       });
 
       while (currentStepIndex < currentPipeline.length) {
@@ -1002,20 +788,12 @@ export class Runtime {
           const result = await plugin.execute(currentStep.action, context);
 
           // Log step execution
-          MonitorManager.publishEvent({
-            type: "runtime.pipeline.step.executed",
-            message: "Step execution completed",
-            logLevel: "debug",
-            metadata: {
-              currentPipeline,
-              currentStepIndex,
-              pipelineLength: currentPipeline.length,
-              executedStep: {
-                step: currentStep,
-                result
-              },
-              contextChain: context.contextChain
-            }
+          this.logger.debug("step execution completed", {
+            currentPipeline,
+            currentStepIndex,
+            pipelineLength: currentPipeline.length,
+            executedStep: { step: currentStep, result },
+            contextChain: context.contextChain
           });
 
           if (!result.success) {
@@ -1031,9 +809,6 @@ export class Runtime {
               failedStep: currentStep
             };
             context.contextChain.push(errorContext);
-
-            // Update monitoring state after error context changes
-            await this.updateMonitoringState();
           } else if (result.data) {
             // Add successful result to context chain
             context.contextChain.push({
@@ -1045,9 +820,6 @@ export class Runtime {
               timestamp: Date.now(),
               ...result.data
             });
-
-            // Update monitoring state after context changes
-            await this.updateMonitoringState();
           }
 
           // Evaluate pipeline modification with updated context
@@ -1076,66 +848,50 @@ export class Runtime {
             ];
 
             // Log modification
-            MonitorManager.publishEvent({
-              type: "runtime.pipeline.modification.applied",
-              message: "Pipeline modification applied",
-              logLevel: "debug",
-              metadata: {
-                currentPipeline,
-                currentStepIndex,
-                pipelineLength: currentPipeline.length,
-                modification,
-                contextChain: context.contextChain
-              }
+            this.logger.info("pipeline modification applied", {
+              currentPipeline,
+              currentStepIndex,
+              pipelineLength: currentPipeline.length,
+              modification,
+              contextChain: context.contextChain
             });
 
             // Emit pipeline modification event
-            MonitorManager.publishEvent({
-              type: "pipeline.modification",
-              message: "Pipeline modified during execution",
-              metadata: {
-                explanation: modification.explanation,
-                currentStep,
-                modifiedSteps: modification.modifiedSteps,
-                pipeline: currentPipeline
-              }
+            this.logger.info("pipeline modification applied", {
+              explanation: modification.explanation,
+              currentStep,
+              modifiedSteps: modification.modifiedSteps,
+              pipeline: currentPipeline
             });
           }
-        } catch (error) {
+        } catch (err: unknown) {
+          const error = err instanceof Error ? err : new Error(String(err));
           // Add error to context chain for unexpected errors
           const errorContext: ErrorContextItem = {
             id: `error-${Date.now()}`,
             pluginId: currentStep.pluginId,
             type: "error",
             action: currentStep.action,
-            content: error instanceof Error ? error.message : String(error),
+            content: error.message,
             timestamp: Date.now(),
-            error: error instanceof Error ? error.message : String(error),
+            error: error.message,
             failedStep: currentStep
           };
           context.contextChain.push(errorContext);
 
-          // Update monitoring state after error context changes
-          await this.updateMonitoringState();
-
           // Log failed step
-          MonitorManager.publishEvent({
-            type: "runtime.pipeline.step.failed",
-            message: "Step execution failed",
-            logLevel: "error",
-            metadata: {
-              currentPipeline,
-              currentStepIndex,
-              pipelineLength: currentPipeline.length,
-              executedStep: {
-                step: currentStep,
-                result: {
-                  success: false,
-                  error: error instanceof Error ? error.message : String(error)
-                }
-              },
-              contextChain: context.contextChain
-            }
+          this.logger.error("step execution failed", {
+            currentPipeline,
+            currentStepIndex,
+            pipelineLength: currentPipeline.length,
+            executedStep: {
+              step: currentStep,
+              result: {
+                success: false,
+                error: error.message
+              }
+            },
+            contextChain: context.contextChain
           });
         }
 
@@ -1143,27 +899,93 @@ export class Runtime {
       }
     } finally {
       this.currentContext = undefined;
-      await this.updateMonitoringState();
     }
   }
 
-  private async updateMonitoringState() {
-    MonitorManager.publishEvent({
-      type: "state",
-      message: "Agent state update",
-      metadata: {
-        state: {
-          currentContext: this.currentContext,
-          queueLength: this.eventQueue.length,
-          isRunning: this.isRunning,
-          lastUpdate: Date.now()
-        }
+  /**
+   * Attempts to generate an object from an LLM using a zod schema and prompt, then parses the response as JSON.
+   * Retries up to `maxRetries` times in case of errors.
+   *
+   * @template T - A Zod schema type used for validation.
+   * @param {T} schema - The Zod schema to validate the generated object.
+   * @param {string} prompt - The prompt used for the text generation model.
+   * @param {OperationConfig & { maxRetries?: number }} [config] - Optional configuration, including max retries.
+   * @returns {Promise<T>} - The parsed and validated object.
+   * @throws {Error} - Throws if all retries fail.
+   */
+  public async getObject<T extends z.ZodType>(
+    schema: T,
+    prompt: string,
+    config?: OperationConfig & { maxRetries?: number }
+  ): Promise<z.infer<T>> {
+    const MAX_RETRIES = config?.maxRetries || 3;
+    let lastResponse: string = "";
+    let lastJsonString: string = "";
+    let lastError: string = "";
+
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        const input =
+          attempt > 0
+            ? generateRetryTemplate({
+                schema: formatZodSchema(schema),
+                prompt,
+                lastResponse: lastResponse,
+                error: lastError
+              })
+            : generateObjectTemplate({
+                schema: formatZodSchema(schema),
+                prompt
+              });
+
+        lastResponse = await this.modelManager.executeCapability(
+          TEXT_GENERATION_CAPABILITY,
+          input,
+          config
+        );
+      } catch (err: unknown) {
+        lastError = err instanceof Error ? err.message : String(err);
+
+        this.logger.error("failed to generate object from LLM model", {
+          error: lastError,
+          attempt: attempt + 1
+        });
+
+        if (attempt === MAX_RETRIES - 1) throw err;
       }
-    });
+
+      try {
+        lastJsonString = extractJson(lastResponse).trim();
+        const json = JSON.parse(lastJsonString);
+        const result = schema.parse(json);
+
+        this.logger.debug("successfully parsed JSON from LLM model response", {
+          output: result
+        });
+
+        return result;
+      } catch (err: unknown) {
+        lastError = err instanceof Error ? err.message : String(err);
+        this.logger.error(
+          "failed to extract and parse JSON from LLM model response",
+          {
+            error: lastError,
+            attempt: attempt + 1,
+            jsonString: lastJsonString
+          }
+        );
+
+        if (attempt === MAX_RETRIES - 1) throw err;
+      }
+    }
   }
 
   /**
-   * Execute a capability on the model manager
+   * Executes a capability by a model provider registered to the model manager
+   * @param {string} capabilityId - The capability ID to execute
+   * @param {ICapabilities[K]["input"]} input - The input for the capability
+   * @param {ModelRequestConfig} [config] - Optional configuration
+   * @returns {Promise<ICapabilities[K]["output"]>} The capability's output
    */
   public async executeCapability<K extends keyof ICapabilities>(
     capabilityId: K,
