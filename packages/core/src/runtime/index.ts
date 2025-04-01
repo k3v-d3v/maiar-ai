@@ -1,4 +1,4 @@
-import { LoggerOptions } from "winston";
+import { Logger, LoggerOptions } from "winston";
 import { z } from "zod";
 
 import logger from "../lib/logger";
@@ -140,6 +140,20 @@ export class Runtime {
   private eventQueue: AgentContext[];
   private queueInterface: EventQueue;
   private currentContext: AgentContext | undefined;
+
+  /**
+   * Returns a logger instance for the runtime scoped to the initialization
+   */
+  private static get logger(): Logger {
+    return logger.child({ scope: "runtime.init" });
+  }
+
+  /**
+   * Returns the logger instance for the runtime scoped to the runtime
+   */
+  public get logger(): Logger {
+    return logger.child({ scope: "runtime" });
+  }
 
   private constructor(
     modelManager: ModelManager,
