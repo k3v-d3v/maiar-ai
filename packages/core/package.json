@@ -50,6 +50,8 @@
     "openai": "4.82.0",
     "rxjs": "7.8.1",
     "winston": "3.17.0",
+    "winston-transport": "4.9.0",
+    "ws": "8.18.1",
     "zod": "3.24.1"
   },
   "devDependencies": {
