@@ -18,8 +18,6 @@
     "@maiar-ai/memory-sqlite": "workspace:*",
     "@maiar-ai/model-ollama": "workspace:*",
     "@maiar-ai/model-openai": "workspace:*",
-    "@maiar-ai/monitor-console": "workspace:*",
-    "@maiar-ai/monitor-websocket": "workspace:*",
     "@maiar-ai/plugin-character": "workspace:*",
     "@maiar-ai/plugin-discord": "workspace:*",
     "@maiar-ai/plugin-express": "workspace:*",

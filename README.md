@@ -68,8 +68,6 @@ import { OpenAIProvider } from "@maiar-ai/model-openai";
 
 import { SQLiteProvider } from "@maiar-ai/memory-sqlite";
 
-import { ConsoleMonitorProvider } from "@maiar-ai/monitor-console";
-
 import { PluginTerminal } from "@maiar-ai/plugin-terminal";
 import { PluginTextGeneration } from "@maiar-ai/plugin-text";
 
@@ -83,11 +81,11 @@ const runtime = createRuntime({
   memory: new SQLiteProvider({
     dbPath: path.join(process.cwd(), "data", "conversations.db")
   }),
-  monitors: [new ConsoleMonitorProvider()],
   plugins: [
     new PluginTextGeneration(),
     new PluginTerminal({ user: "test", agentName: "maiar-starter" })
-  ]
+  ],
+  capabilityAliases: []
 });
 
 // Start the runtime

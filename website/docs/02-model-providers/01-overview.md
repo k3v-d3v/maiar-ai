@@ -108,7 +108,6 @@ While these think tags are valuable for debugging and understanding the model's 
 
 ```typescript
 import { ModelProvider, ModelRequestConfig } from "@maiar-ai/core";
-import { MonitorManager } from "@maiar-ai/core";
 
 export interface DeepseekConfig {
   baseUrl: string;
@@ -147,13 +146,9 @@ export class DeepseekProvider implements ModelProvider {
     config?: ModelRequestConfig
   ): Promise<string> {
     try {
-      MonitorManager.publishEvent({
+      this.logger.info("sending prompt to deepseek", {
         type: "model.request.sent",
-        message: "Sending prompt to Deepseek",
-        logLevel: "info",
-        metadata: {
-          prompt
-        }
+        prompt
       });
 
       const response = await fetch(`${this.baseUrl}/api/generate`, {
@@ -179,13 +174,9 @@ export class DeepseekProvider implements ModelProvider {
       const data = await response.json();
       const text = data.response;
 
-      MonitorManager.publishEvent({
+      this.logger.info("received response from deepseek", {
         type: "model.response.received",
-        message: "Received response from Deepseek",
-        logLevel: "info",
-        metadata: {
-          responseLength: text.length
-        }
+        responseLength: text.length
       });
 
       // Clean up the model's reasoning process and think tags
@@ -195,13 +186,9 @@ export class DeepseekProvider implements ModelProvider {
 
       return cleanedText;
     } catch (error) {
-      MonitorManager.publishEvent({
+      this.logger.error("error getting text from deepseek", {
         type: "model.generation.error",
-        message: "Error getting text from Deepseek",
-        logLevel: "error",
-        metadata: {
-          error: error instanceof Error ? error.message : String(error)
-        }
+        error: error instanceof Error ? error.message : String(error)
       });
       throw error;
     }

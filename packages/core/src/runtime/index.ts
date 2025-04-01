@@ -6,7 +6,6 @@ import { MemoryManager } from "./managers/memory";
 import { ModelManager } from "./managers/model";
 import { TEXT_GENERATION_CAPABILITY } from "./managers/model/capability/constants";
 import { ICapabilities } from "./managers/model/capability/types";
-import { MonitorManager } from "./managers/monitor";
 import { PluginRegistry } from "./managers/plugin";
 import {
   AgentContext,
@@ -38,7 +37,6 @@ import {
 } from "./pipeline/types";
 import { MemoryProvider } from "./providers/memory";
 import { ModelProvider, ModelRequestConfig } from "./providers/model";
-import { MonitorProvider } from "./providers/monitor";
 import { Plugin } from "./providers/plugin";
 
 const REQUIRED_CAPABILITIES = [TEXT_GENERATION_CAPABILITY];
@@ -123,7 +121,6 @@ export class Runtime {
 
   private modelManager: ModelManager;
   private memoryManager: MemoryManager;
-  private monitorManager: typeof MonitorManager;
   private pluginRegistry: PluginRegistry;
 
   private isRunning: boolean;
@@ -148,7 +145,6 @@ export class Runtime {
   private constructor(
     modelManager: ModelManager,
     memoryManager: MemoryManager,
-    monitorManager: typeof MonitorManager,
     pluginRegistry: PluginRegistry
   ) {
     this.operations = {
@@ -167,7 +163,6 @@ export class Runtime {
 
     this.modelManager = modelManager;
     this.memoryManager = memoryManager;
-    this.monitorManager = monitorManager;
     this.pluginRegistry = pluginRegistry;
 
     this.isRunning = false;
@@ -296,14 +291,12 @@ export class Runtime {
   public static async init({
     modelProviders,
     memoryProvider,
-    monitorProviders,
     plugins,
     capabilityAliases,
     options
   }: {
     modelProviders: ModelProvider[];
     memoryProvider: MemoryProvider;
-    monitorProviders: MonitorProvider[];
     plugins: Plugin[];
     capabilityAliases: string[][];
     options?: {
@@ -324,10 +317,6 @@ export class Runtime {
 by Uranium Corporation
     `);
     this.logger.info("runtime initializing...");
-
-    await MonitorManager.init(...monitorProviders);
-    await MonitorManager.checkHealth();
-    const monitorManager = MonitorManager;
 
     const modelManager = new ModelManager(...modelProviders);
     await modelManager.init();
@@ -402,7 +391,6 @@ by Uranium Corporation
         modelProviders: modelProviders.map((p) => p.id),
         capabilities: modelManager.getAvailableCapabilities(),
         memoryProvider: memoryProvider.id,
-        monitorProviders: monitorProviders.map((p) => p.id),
         plugins: plugins.map((p) => ({
           id: p.id,
           name: p.name,
@@ -419,12 +407,7 @@ by Uranium Corporation
       }
     });
 
-    return new Runtime(
-      modelManager,
-      memoryManager,
-      monitorManager,
-      pluginRegistry
-    );
+    return new Runtime(modelManager, memoryManager, pluginRegistry);
   }
 
   /**
@@ -432,13 +415,6 @@ by Uranium Corporation
    */
   public get memory(): MemoryManager {
     return this.memoryManager;
-  }
-
-  /**
-   * Access to the monitor manager for plugins
-   */
-  public get monitor(): typeof MonitorManager {
-    return this.monitorManager;
   }
 
   /**

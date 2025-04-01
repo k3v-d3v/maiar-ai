@@ -3,7 +3,6 @@ import { z } from "zod";
 
 import logger from "../../lib/logger";
 import { ICapabilities } from "../managers/model/capability/types";
-import { MonitorManager } from "../managers/monitor";
 import { OperationConfig } from "../pipeline/operations";
 
 /**
@@ -46,13 +45,6 @@ export abstract class ModelProvider {
     this.name = name;
     this.description = description;
     this.capabilities = new Map<string, ModelCapability>();
-  }
-
-  /**
-   * Get access to the monitor manager
-   */
-  public get monitor(): typeof MonitorManager {
-    return MonitorManager;
   }
 
   public addCapability(capability: ModelCapability): void {

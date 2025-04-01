@@ -59,9 +59,9 @@ By default, the client connects to WebSocket at `ws://localhost:3001/monitor`. M
 To enable the WebSocket monitor in your Maiar agent, add the provider to your agent configuration:
 
 ```typescript
-import { createRuntime } from "@maiar-ai/core";
-
 import { WebSocketMonitorProvider } from "@maiar-ai/monitor-websocket";
+
+import { createRuntime } from "@maiar-ai/core";
 
 const runtime = createRuntime({
   // ...other configurations
@@ -83,9 +83,9 @@ If you need to configure a custom port or path for the WebSocket connection, you
 1. Configure the WebSocketMonitorProvider on your agent:
 
 ```typescript
-import { createRuntime } from "@maiar-ai/core";
-
 import { WebSocketMonitorProvider } from "@maiar-ai/monitor-websocket";
+
+import { createRuntime } from "@maiar-ai/core";
 
 const runtime = createRuntime({
   // ...other configurations

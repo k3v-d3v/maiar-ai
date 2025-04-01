@@ -87,8 +87,7 @@ export default function Plugins(): React.JSX.Element {
             item.type === "dir" &&
             (item.name.startsWith("plugin-") ||
               item.name.startsWith("memory-") ||
-              item.name.startsWith("model-") ||
-              item.name.startsWith("monitor-"))
+              item.name.startsWith("model-"))
         );
 
         // Transform directory data into official plugin format
@@ -111,9 +110,7 @@ export default function Plugins(): React.JSX.Element {
                   ? "plugin"
                   : dir.name.startsWith("memory-")
                     ? "memory package"
-                    : dir.name.startsWith("monitor-")
-                      ? "monitor package"
-                      : "model package"
+                    : "model package"
               } for Maiar framework`,
               author: repoData.organization.login,
               authorAvatar: `${repoData.organization.avatar_url}&s=48`,
@@ -125,9 +122,7 @@ export default function Plugins(): React.JSX.Element {
                   ? "plugin"
                   : dir.name.startsWith("memory-")
                     ? "memory"
-                    : dir.name.startsWith("monitor-")
-                      ? "monitor"
-                      : "model",
+                    : "model",
                 dir.name.split("-")[1]
               ],
               isOfficial: true,

@@ -4,13 +4,7 @@ import { config } from "dotenv";
 import { readFileSync } from "fs";
 import { join, resolve } from "path";
 
-import {
-  MemoryProvider,
-  ModelProvider,
-  MonitorProvider,
-  Plugin,
-  Runtime
-} from "@maiar-ai/core";
+import { MemoryProvider, ModelProvider, Plugin, Runtime } from "@maiar-ai/core";
 
 import {
   OpenAIImageGenerationModel,
@@ -19,9 +13,6 @@ import {
 } from "@maiar-ai/model-openai";
 
 import { SQLiteMemoryProvider } from "@maiar-ai/memory-sqlite";
-
-import { ConsoleMonitorProvider } from "@maiar-ai/monitor-console";
-import { WebSocketMonitorProvider } from "@maiar-ai/monitor-websocket";
 
 import { CharacterPlugin } from "@maiar-ai/plugin-character";
 import {
@@ -67,14 +58,6 @@ async function main() {
     dbPath: join(process.cwd(), "data", "conversations.db")
   });
 
-  const monitorProviders: MonitorProvider[] = [
-    new ConsoleMonitorProvider(),
-    new WebSocketMonitorProvider({
-      port: 3001,
-      path: "/monitor"
-    })
-  ];
-
   const plugins: Plugin[] = [
     new ImageGenerationPlugin(),
     new ExpressPlugin({
@@ -119,7 +102,6 @@ async function main() {
   const agent = await Runtime.init({
     modelProviders,
     memoryProvider,
-    monitorProviders,
     plugins,
     capabilityAliases
   });
