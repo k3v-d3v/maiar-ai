@@ -5,6 +5,7 @@ import { readFileSync } from "fs";
 import { join, resolve } from "path";
 
 import { MemoryProvider, ModelProvider, Plugin, Runtime } from "@maiar-ai/core";
+import { stdout, websocket } from "@maiar-ai/core/dist/logger";
 
 import {
   OpenAIImageGenerationModel,
@@ -103,7 +104,13 @@ async function main() {
     modelProviders,
     memoryProvider,
     plugins,
-    capabilityAliases
+    capabilityAliases,
+    options: {
+      logger: {
+        level: "debug",
+        transports: [stdout, websocket({ port: 3001, path: "/monitor" })]
+      }
+    }
   });
 
   // Handle shutdown gracefully
