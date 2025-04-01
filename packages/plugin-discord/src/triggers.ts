@@ -5,7 +5,8 @@
 import { BaseGuildTextChannel, Events } from "discord.js";
 import { Message } from "discord.js";
 
-import { MonitorManager, Runtime, UserInputContext } from "@maiar-ai/core";
+import { Runtime, UserInputContext } from "@maiar-ai/core";
+import * as maiarLogger from "@maiar-ai/core/dist/logger";
 
 import { DiscordService } from "./services";
 import { generateMessageIntentTemplate } from "./templates";
@@ -22,6 +23,10 @@ export const postListenerTrigger: DiscordTriggerFactory = (
   discordService: DiscordService,
   runtime: Runtime
 ) => {
+  const logger = maiarLogger.default.child({
+    scope: `plugin-discord`
+  });
+
   async function handleMessage(message: Message): Promise<void> {
     // Skip bot messages
     if (message.author.bot) return;
@@ -49,16 +54,13 @@ export const postListenerTrigger: DiscordTriggerFactory = (
           message.id
         );
 
-        MonitorManager.publishEvent({
+        logger.info("skipping message - not intended for agent", {
           type: "discord.message.skipped",
-          message: "Skipping message - not intended for agent",
-          metadata: {
-            content: message.content,
-            channelId: message.channelId,
-            messageId: message.id,
-            userId: message.author.id,
-            plugin: discordService.pluginId
-          }
+          content: message.content,
+          channelId: message.channelId,
+          messageId: message.id,
+          userId: message.author.id,
+          plugin: discordService.pluginId
         });
 
         return;
@@ -68,16 +70,13 @@ export const postListenerTrigger: DiscordTriggerFactory = (
         `<@${discordService.clientId}>`
       );
 
-      MonitorManager.publishEvent({
+      logger.info("processing message", {
         type: "discord.message.processing",
-        message: "Processing message",
-        metadata: {
-          content: message.content,
-          author: message.author.username,
-          channelId: message.channelId,
-          isMention: isMentioned,
-          isReply: !!message.reference?.messageId
-        }
+        content: message.content,
+        author: message.author.username,
+        channelId: message.channelId,
+        isMention: isMentioned,
+        isReply: !!message.reference?.messageId
       });
 
       // Get recent conversation history
@@ -87,17 +86,14 @@ export const postListenerTrigger: DiscordTriggerFactory = (
         10 // Limit to last 10 messages
       );
 
-      MonitorManager.publishEvent({
+      logger.info("retrieved conversation history", {
         type: "discord.message.history",
-        message: "Retrieved conversation history",
-        metadata: {
-          historyCount: recentHistory.length,
-          history: recentHistory.map((msg) => ({
-            role: msg.role,
-            content: msg.content,
-            timestamp: new Date(msg.timestamp).toISOString()
-          }))
-        }
+        historyCount: recentHistory.length,
+        history: recentHistory.map((msg) => ({
+          role: msg.role,
+          content: msg.content,
+          timestamp: new Date(msg.timestamp).toISOString()
+        }))
       });
 
       const intentTemplate = generateMessageIntentTemplate(
@@ -114,27 +110,21 @@ export const postListenerTrigger: DiscordTriggerFactory = (
         intentTemplate
       );
 
-      MonitorManager.publishEvent({
+      logger.info("intent analysis result", {
         type: "discord.message.intent",
-        message: "Intent analysis result",
-        metadata: {
-          isIntendedForAgent: intent.isIntendedForAgent,
-          reason: intent.reason,
-          message: message.content
-        }
+        isIntendedForAgent: intent.isIntendedForAgent,
+        reason: intent.reason,
+        message: message.content
       });
 
       if (intent.isIntendedForAgent) {
         // Set processing lock
         discordService.isProcessing = true;
 
-        MonitorManager.publishEvent({
+        logger.info("message processing started - agent locked", {
           type: "discord.message.processing",
-          message: "Message processing started - agent locked",
-          metadata: {
-            content: message.content,
-            author: message.author.username
-          }
+          content: message.content,
+          author: message.author.username
         });
 
         // Start typing indicator
@@ -186,34 +176,27 @@ export const postListenerTrigger: DiscordTriggerFactory = (
         );
 
         // Add detailed info logging for skipped messages
-        MonitorManager.publishEvent({
+        logger.info("skipping message - not intended for agent", {
           type: "discord.message.skipped",
-          message: "Skipping message - not intended for agent",
-          metadata: {
-            content: message.content,
-            author: message.author.username,
-            reason: intent.reason,
-            isMention: isMentioned,
-            isReply: !!message.reference?.messageId,
-            hasPrefix: message.content.startsWith(
-              discordService.commandPrefix || "!"
-            )
-          }
+          content: message.content,
+          author: message.author.username,
+          reason: intent.reason,
+          isMention: isMentioned,
+          isReply: !!message.reference?.messageId,
+          hasPrefix: message.content.startsWith(
+            discordService.commandPrefix || "!"
+          )
         });
       }
     } catch (error) {
       // Make sure we unlock if there's an error
       discordService.isProcessing = false;
-      MonitorManager.publishEvent({
+      logger.error("error processing message intent", {
         type: "discord.message.intent.error",
-        message: "Error processing message intent",
-        logLevel: "error",
-        metadata: {
-          error: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-          messageContent: message.content,
-          author: message.author.username
-        }
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        messageContent: message.content,
+        author: message.author.username
       });
     }
   }

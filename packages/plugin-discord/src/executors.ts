@@ -3,10 +3,10 @@ import { BaseGuildTextChannel } from "discord.js";
 import {
   AgentContext,
   ExecutorImplementation,
-  MonitorManager,
   PluginResult,
   Runtime
 } from "@maiar-ai/core";
+import * as maiarLogger from "@maiar-ai/core/dist/logger";
 
 import { DiscordService } from "./services";
 import {
@@ -32,16 +32,22 @@ export function discordExecutorFactory(
   execute: (
     context: AgentContext,
     service: DiscordService,
-    runtime: Runtime
+    runtime: Runtime,
+    logger: maiarLogger.Logger
   ) => Promise<PluginResult>
 ): DiscordExecutorFactory {
+  const logger = maiarLogger.default.child({
+    scope: `plugin-discord`
+  });
+
   return (
     service: DiscordService,
     runtime: Runtime
   ): ExecutorImplementation => ({
     name,
     description,
-    execute: (context: AgentContext) => execute(context, service, runtime)
+    execute: (context: AgentContext) =>
+      execute(context, service, runtime, logger)
   });
 }
 
@@ -54,7 +60,8 @@ export const sendMessageExecutor = discordExecutorFactory(
   async (
     context: AgentContext,
     service: DiscordService,
-    runtime: Runtime
+    runtime: Runtime,
+    logger: maiarLogger.Logger
   ): Promise<PluginResult> => {
     try {
       const response = await runtime.operations.getObject(
@@ -67,13 +74,10 @@ export const sendMessageExecutor = discordExecutorFactory(
         ? await service.client.guilds.fetch(service.guildId)
         : service.client.guilds.cache.first();
 
-      MonitorManager.publishEvent({
+      logger.info("fetched guild", {
         type: "discord.guild.fetch",
-        message: "Fetched guild",
-        metadata: {
-          guildId: guild?.id,
-          guildName: guild?.name
-        }
+        guildId: guild?.id,
+        guildName: guild?.name
       });
 
       if (!guild) {
@@ -94,19 +98,16 @@ export const sendMessageExecutor = discordExecutorFactory(
         };
       }
 
-      MonitorManager.publishEvent({
+      logger.info("text channels fetched", {
         type: "discord.message.sending",
-        message: "Text channels fetched",
-        metadata: {
-          size: textChannels.size,
-          channels: Array.from(textChannels.values()).map((channel) => ({
-            id: channel.id,
-            name: channel.name,
-            type: "text",
-            description:
-              channel.topic || `${channel.parent?.name || ""} / ${channel.name}`
-          }))
-        }
+        size: textChannels.size,
+        channels: Array.from(textChannels.values()).map((channel) => ({
+          id: channel.id,
+          name: channel.name,
+          type: "text",
+          description:
+            channel.topic || `${channel.parent?.name || ""} / ${channel.name}`
+        }))
       });
 
       // Convert channels to array for AI selection
@@ -119,12 +120,9 @@ export const sendMessageExecutor = discordExecutorFactory(
       })) as ChannelInfo[];
 
       // Log channel info
-      MonitorManager.publishEvent({
+      logger.info("channel info fetched", {
         type: "discord.channel.info",
-        message: "Channel info fetched",
-        metadata: {
-          channels: channelInfo
-        }
+        channels: channelInfo
       });
 
       // Let the AI pick the most appropriate channel
@@ -141,13 +139,10 @@ export const sendMessageExecutor = discordExecutorFactory(
         };
       }
 
-      MonitorManager.publishEvent({
+      logger.info("channel selected", {
         type: "discord.channel.selection",
-        message: "Channel selected",
-        metadata: {
-          channelId: selectedChannel.id,
-          channelName: selectedChannel.name
-        }
+        channelId: selectedChannel.id,
+        channelName: selectedChannel.name
       });
 
       await selectedChannel.send(response.message);
@@ -174,14 +169,11 @@ export const sendMessageExecutor = discordExecutorFactory(
         }
       };
     } catch (error) {
-      MonitorManager.publishEvent({
+      logger.error("error sending discord message", {
         type: "discord.message.send.error",
-        message: "Error sending Discord message",
-        logLevel: "error",
-        metadata: {
-          error: error instanceof Error ? error.message : String(error)
-        }
+        error: error instanceof Error ? error.message : String(error)
       });
+
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error)
@@ -199,7 +191,8 @@ export const replyMessageExecutor = discordExecutorFactory(
   async (
     context: AgentContext,
     service: DiscordService,
-    runtime: Runtime
+    runtime: Runtime,
+    logger: maiarLogger.Logger
   ): Promise<PluginResult> => {
     if (
       !context.platformContext?.metadata?.channelId ||
@@ -239,14 +232,10 @@ export const replyMessageExecutor = discordExecutorFactory(
 
       // Release processing lock after reply is sent
       service.isProcessing = false;
-      MonitorManager.publishEvent({
+      logger.info("message processing complete - agent unlocked", {
         type: "discord.message.processing.complete",
-        message: "Message processing complete - agent unlocked",
-        logLevel: "info",
-        metadata: {
-          messageId,
-          channelId
-        }
+        messageId,
+        channelId
       });
 
       const user = (context.platformContext as DiscordPlatformContext).metadata
@@ -267,14 +256,11 @@ export const replyMessageExecutor = discordExecutorFactory(
       service.isProcessing = false;
       service.stopTypingIndicator(channelId);
 
-      MonitorManager.publishEvent({
+      logger.error("error sending discord reply", {
         type: "discord.message.reply.error",
-        message: "Error sending Discord reply",
-        logLevel: "error",
-        metadata: {
-          error: error instanceof Error ? error.message : String(error)
-        }
+        error: error instanceof Error ? error.message : String(error)
       });
+
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error)

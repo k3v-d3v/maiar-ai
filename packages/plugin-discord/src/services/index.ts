@@ -6,7 +6,7 @@ import {
   PermissionsBitField
 } from "discord.js";
 
-import { MonitorManager } from "@maiar-ai/core";
+import logger, { Logger } from "@maiar-ai/core/dist/logger";
 
 export class DiscordService {
   public readonly clientId: string;
@@ -20,12 +20,16 @@ export class DiscordService {
 
   private typingIntervals: Map<string, NodeJS.Timeout>;
 
-  get isProcessing(): boolean {
+  public get isProcessing(): boolean {
     return this._isProcessing;
   }
 
-  set isProcessing(value: boolean) {
+  public set isProcessing(value: boolean) {
     this._isProcessing = value;
+  }
+
+  private get logger(): Logger {
+    return logger.child({ scope: "discord.service" });
   }
 
   constructor({
@@ -87,14 +91,10 @@ export class DiscordService {
     // (Discord's typing indicator lasts 10 seconds, so we refresh before it expires)
     const interval = setInterval(() => {
       channel.sendTyping().catch((error) => {
-        MonitorManager.publishEvent({
+        this.logger.error("error sending typing indicator", {
           type: "discord.typing.error",
-          message: "Error sending typing indicator",
-          logLevel: "error",
-          metadata: {
-            error,
-            channelId: channel.id
-          }
+          error,
+          channelId: channel.id
         });
       });
     }, 7000);
@@ -104,14 +104,10 @@ export class DiscordService {
 
     // Send initial typing indicator
     channel.sendTyping().catch((error) => {
-      MonitorManager.publishEvent({
+      this.logger.error("error sending typing indicator", {
         type: "discord.typing.error",
-        message: "Error sending typing indicator",
-        logLevel: "error",
-        metadata: {
-          error,
-          channelId: channel.id
-        }
+        error,
+        channelId: channel.id
       });
     });
   }
