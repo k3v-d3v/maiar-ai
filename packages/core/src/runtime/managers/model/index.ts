@@ -3,7 +3,6 @@ import { Logger } from "winston";
 import logger from "../../../lib/logger";
 import { OperationConfig } from "../../pipeline/operations";
 import { ModelProvider } from "../../providers/model";
-import { MonitorManager } from "../monitor";
 import { CapabilityRegistry } from "./capability";
 import { ICapabilities } from "./capability/types";
 
@@ -52,19 +51,21 @@ export class ModelManager {
           capability.id,
           modelProvider.id
         );
-        MonitorManager.publishEvent({
-          type: "default.model.capability.set",
-          message: `set model provider ${modelProvider.id} as default for capability "${capability.id}"`,
-          logLevel: "debug"
-        });
+        this.logger.debug(
+          `set model provider ${modelProvider.id} as default for capability "${capability.id}"`,
+          {
+            type: "default.model.capability.set"
+          }
+        );
       }
     }
 
-    MonitorManager.publishEvent({
-      type: "model.provider.registered",
-      message: `model provider "${modelProvider.id}" registered successfully`,
-      logLevel: "debug"
-    });
+    this.logger.debug(
+      `model provider "${modelProvider.id}" registered successfully`,
+      {
+        type: "model.provider.registered"
+      }
+    );
   }
 
   public async init(): Promise<void> {
@@ -72,19 +73,21 @@ export class ModelManager {
       Array.from(this.models.values()).map(async (modelProvider) => {
         try {
           await modelProvider.init();
-          MonitorManager.publishEvent({
-            type: "model.provider.initialization.success",
-            message: `model provider initialized successfully for "${modelProvider.id}"`,
-            logLevel: "debug"
-          });
+          this.logger.debug(
+            `model provider initialized successfully for "${modelProvider.id}"`,
+            {
+              type: "model.provider.initialization.success"
+            }
+          );
         } catch (err: unknown) {
           const error = err instanceof Error ? err : new Error(String(err));
-          MonitorManager.publishEvent({
-            type: "model.provider.initialization.failed",
-            message: `model provider initialization failed for "${modelProvider.id}"`,
-            logLevel: "error",
-            metadata: { error: error.message }
-          });
+          this.logger.error(
+            `model provider initialization failed for "${modelProvider.id}"`,
+            {
+              type: "model.provider.initialization.failed",
+              error: error.message
+            }
+          );
         }
       })
     );
@@ -98,12 +101,14 @@ export class ModelManager {
       throw new Error(`Capability ${canonicalId} not found`);
     }
     this.capabilityAliases.set(alias, canonicalId);
-    MonitorManager.publishEvent({
-      type: "model.capability.alias.registered",
-      message: `registered capability alias "${alias}" for "${canonicalId}"`,
-      logLevel: "debug",
-      metadata: { alias, canonicalId }
-    });
+    this.logger.debug(
+      `registered capability alias "${alias}" for "${canonicalId}"`,
+      {
+        type: "model.capability.alias.registered",
+        alias,
+        canonicalId
+      }
+    );
   }
 
   /**
@@ -197,21 +202,21 @@ export class ModelManager {
       Array.from(this.models.values()).map(async (model) => {
         try {
           await model.checkHealth();
-          MonitorManager.publishEvent({
-            type: "model.healthcheck.passed",
-            message: `health check for model provider ${model.id} passed`,
-            logLevel: "debug"
-          });
+          this.logger.debug(
+            `health check for model provider ${model.id} passed`,
+            {
+              type: "model.healthcheck.passed"
+            }
+          );
         } catch (err: unknown) {
           const error = err instanceof Error ? err : new Error(String(err));
-          MonitorManager.publishEvent({
-            type: "model.healthcheck.failed",
-            message: `health check for model provider ${model.id} failed`,
-            logLevel: "error",
-            metadata: {
+          this.logger.error(
+            `health check for model provider ${model.id} failed`,
+            {
+              type: "model.healthcheck.failed",
               error: error.message
             }
-          });
+          );
 
           throw error;
         }
