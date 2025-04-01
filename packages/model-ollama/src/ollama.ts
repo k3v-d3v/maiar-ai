@@ -1,10 +1,6 @@
 import { z } from "zod";
 
-import {
-  ModelProvider,
-  ModelRequestConfig,
-  MonitorManager
-} from "@maiar-ai/core";
+import { ModelProvider, ModelRequestConfig } from "@maiar-ai/core";
 
 import { verifyBasicHealth } from "./index";
 
@@ -78,15 +74,12 @@ export class OllamaModelProvider extends ModelProvider {
       const data = await response.json();
       return data.response;
     } catch (error) {
-      MonitorManager.publishEvent({
+      this.logger.error("error getting text from ollama", {
         type: "model.ollama.generation.error",
-        message: "Error getting text from Ollama",
-        logLevel: "error",
-        metadata: {
-          model: this.model,
-          error: error instanceof Error ? error.message : String(error)
-        }
+        model: this.model,
+        error: error instanceof Error ? error.message : String(error)
       });
+
       throw error;
     }
   }
@@ -104,26 +97,19 @@ export class OllamaModelProvider extends ModelProvider {
       // Send a GET request to the tag endpoint and verify if the model exists
       await verifyBasicHealth(this.baseUrl, this.model);
 
-      MonitorManager.publishEvent({
+      this.logger.info(`ollama model '${this.model}' health check passed`, {
         type: "model.ollama.health_check.passed",
-        message: `Ollama model '${this.model}' health check passed`,
-        logLevel: "info",
-        metadata: {
-          model: this.model,
-          baseUrl: this.baseUrl
-        }
+        model: this.model,
+        baseUrl: this.baseUrl
       });
     } catch (error) {
-      MonitorManager.publishEvent({
+      this.logger.error("ollama model health check failed", {
         type: "model.ollama.health_check.failed",
-        message: "Ollama model health check failed",
-        logLevel: "error",
-        metadata: {
-          model: this.model,
-          baseUrl: this.baseUrl,
-          error: error instanceof Error ? error.message : String(error)
-        }
+        model: this.model,
+        baseUrl: this.baseUrl,
+        error: error instanceof Error ? error.message : String(error)
       });
+
       throw error;
     }
   }
