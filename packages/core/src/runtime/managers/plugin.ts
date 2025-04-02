@@ -2,29 +2,39 @@ import { Logger } from "winston";
 
 import logger from "../../lib/logger";
 import { Plugin } from "../providers/plugin";
+import { Executor, Trigger } from "../providers/plugin.types";
 
 /**
  * Registry for managing plugins
  */
 export class PluginRegistry {
-  private plugins: Map<string, Plugin>;
+  private _plugins: Plugin[];
+  private _triggers: Trigger[];
+  private _executors: Executor[];
 
-  public get logger(): Logger {
+  private get logger(): Logger {
     return logger.child({ scope: "plugin.registry" });
   }
 
-  constructor(...plugins: Plugin[]) {
-    this.plugins = new Map<string, Plugin>();
-
-    for (const plugin of plugins) {
-      this.registerPlugin(plugin);
-    }
+  public get plugins(): Plugin[] {
+    return this._plugins;
   }
 
-  /**
-   * Register a new plugin
-   */
-  public registerPlugin(plugin: Plugin): void {
+  public get triggers(): Trigger[] {
+    return this._triggers;
+  }
+
+  public get executors(): Executor[] {
+    return this._executors;
+  }
+
+  constructor() {
+    this._plugins = [];
+    this._triggers = [];
+    this._executors = [];
+  }
+
+  public async registerPlugin(plugin: Plugin): Promise<void> {
     if (!plugin.id) {
       this.logger.error("plugin ID validation failed", {
         type: "registry.plugin.validation.failed",
@@ -33,44 +43,88 @@ export class PluginRegistry {
       throw new Error("Plugin ID cannot be empty");
     }
 
-    if (this.plugins.has(plugin.id)) {
-      const existing = Array.from(this.plugins.keys());
-      this.logger.error("plugin ID collision", {
+    if (this._plugins.some((p) => p.id === plugin.id)) {
+      this.logger.error(`plugin id collision for ${plugin.id}`, {
         type: "registry.plugin.id.collision",
         error: "ID collision",
-        id: plugin.id,
-        existingPlugins: existing
+        pluginId: plugin.id,
+        registeredPluginIds: this.plugins.map((p) => p.id)
       });
 
       throw new Error(
-        `Plugin ID collision: ${plugin.id} is already registered.\n` +
-          `Currently registered plugins: ${existing.join(", ")}`
+        `There is already a plugin registered with id ${plugin.id}`
       );
     }
 
-    this.plugins.set(plugin.id, plugin);
-  }
+    try {
+      await plugin.init();
 
-  /**
-   * Get a plugin by id
-   */
-  public getPlugin(id: string): Plugin | undefined {
-    const plugin = this.plugins.get(id);
-    if (!plugin) {
-      this.logger.error("plugin not found", {
-        type: "registry.plugin.not_found",
-        error: "Plugin not found",
-        id,
-        availablePlugins: Array.from(this.plugins.keys())
+      this.logger.info(`plugin initialization for "${plugin.id}" successful`, {
+        type: "plugin.init.success",
+        plugin: plugin.id
       });
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+
+      this.logger.error(`plugin initialization for "${plugin.id}" failed`, {
+        type: "plugin.init.failed",
+        plugin: plugin.id,
+        error: error.message
+      });
+
+      throw err;
     }
-    return plugin;
+
+    this._plugins.push(plugin);
+    this._triggers.push(...plugin.triggers);
+    this._executors.push(...plugin.executors);
+
+    this.logger.info(`plugin "${plugin.id}" registered successfully`, {
+      type: "registry.plugin.registered",
+      plugin: plugin.id,
+      triggers: plugin.triggers.map((t) => t.name),
+      executors: plugin.executors.map((e) => e.name)
+    });
   }
 
-  /**
-   * Get all registered plugins
-   */
-  public getAllPlugins(): Plugin[] {
-    return Array.from(this.plugins.values());
+  public async unregisterPlugin(plugin: Plugin): Promise<void> {
+    const p = this._plugins.find((p) => p.id === plugin.id);
+    if (!p) {
+      this.logger.error("plugin not found", {
+        type: "registry.plugin.not.found",
+        pluginId: plugin.id
+      });
+      throw new Error(`Plugin with id ${plugin.id} not found`);
+    }
+
+    try {
+      await plugin.shutdown();
+
+      this.logger.info(`plugin shutdown for "${plugin.id}" successful`, {
+        type: "plugin.shutdown.success",
+        plugin: plugin.id
+      });
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+
+      this.logger.error(`plugin shutdown for "${plugin.id}" failed`, {
+        type: "plugin.shutdown.failed",
+        plugin: plugin.id,
+        error: error.message
+      });
+
+      throw err;
+    }
+
+    this._plugins = this._plugins.filter((p) => p.id !== plugin.id);
+    this._triggers = this._triggers.filter((t) => !plugin.triggers.includes(t));
+    this._executors = this._executors.filter(
+      (e) => !plugin.executors.includes(e)
+    );
+
+    this.logger.info(`plugin "${plugin.id}" unregistered successfully`, {
+      type: "registry.plugin.unregistered",
+      plugin: plugin.id
+    });
   }
 }
