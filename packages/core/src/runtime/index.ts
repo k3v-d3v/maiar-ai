@@ -323,7 +323,12 @@ by Uranium Corporation
     await modelManager.checkHealth();
 
     const memoryManager = new MemoryManager(memoryProvider);
-    const pluginRegistry = new PluginRegistry(...plugins);
+
+    const pluginRegistry = new PluginRegistry();
+    await pluginRegistry.registerPlugin(memoryProvider.getPlugin());
+    for (const plugin of plugins) {
+      await pluginRegistry.registerPlugin(plugin);
+    }
 
     // Add capability aliases to the model manager
     for (const aliasGroup of capabilityAliases) {
@@ -362,7 +367,7 @@ by Uranium Corporation
     );
 
     // Validate all plugins have required capabilities implemented in the model manager
-    for (const plugin of pluginRegistry.getAllPlugins()) {
+    for (const plugin of pluginRegistry.plugins) {
       for (const capability of plugin.requiredCapabilities) {
         if (!modelManager.hasCapability(capability)) {
           this.logger.error(
@@ -397,7 +402,7 @@ by Uranium Corporation
           description: p.description,
           requiredCapabilities: p.requiredCapabilities,
           triggers: p.triggers.map((t) => ({
-            id: t.id
+            id: t.name
           })),
           execuctors: p.executors.map((e) => ({
             name: e.name,
@@ -429,6 +434,7 @@ by Uranium Corporation
    */
   public async start(): Promise<void> {
     if (this.isRunning) {
+      this.logger.warn("runtime already running!");
       return;
     }
 
@@ -438,15 +444,15 @@ by Uranium Corporation
       type: "runtime.started"
     });
 
-    for (const plugin of this.pluginRegistry.getAllPlugins()) {
-      plugin.init(this);
+    for (const plugin of this.pluginRegistry.plugins) {
+      plugin.__setRuntime(this);
 
       for (const trigger of plugin.triggers) {
         this.logger.info(
-          `plugin id "${plugin.id}" trigger "${trigger.id}" starting...`,
+          `plugin id "${plugin.id}" trigger "${trigger.name}" starting...`,
           {
             type: "plugin.trigger.start",
-            trigger: trigger.id,
+            trigger: trigger.name,
             plugin: plugin.id
           }
         );
@@ -484,18 +490,14 @@ by Uranium Corporation
    * Stop the runtime
    */
   public async stop(): Promise<void> {
-    if (!this.isRunning) throw new Error("Runtime is not running");
     this.isRunning = false;
-    this.logger.info("ai agent (powered by $MAIAR) runtime stopped", {
+    this.logger.info("ai agent (powered by $MAIAR) runtime shutting down...", {
       type: "runtime.stop"
     });
-  }
 
-  /**
-   * Get all registered plugins
-   */
-  public getPlugins(): Plugin[] {
-    return this.pluginRegistry.getAllPlugins();
+    for (const plugin of this.pluginRegistry.plugins) {
+      await this.pluginRegistry.unregisterPlugin(plugin);
+    }
   }
 
   /**
@@ -672,9 +674,8 @@ by Uranium Corporation
     const userInput = getUserInput(context);
 
     // Get all available executors from plugins
-    const availablePlugins = this.pluginRegistry
-      .getAllPlugins()
-      .map((plugin: Plugin) => ({
+    const availablePlugins = this.pluginRegistry.plugins.map(
+      (plugin: Plugin) => ({
         id: plugin.id,
         name: plugin.name,
         description: plugin.description,
@@ -682,7 +683,8 @@ by Uranium Corporation
           name: e.name,
           description: e.description
         }))
-      }));
+      })
+    );
 
     // Get platform and message from user input or use defaults
     const platform = userInput?.pluginId || "unknown";
@@ -877,7 +879,10 @@ by Uranium Corporation
           continue;
         }
 
-        const plugin = this.pluginRegistry.getPlugin(currentStep.pluginId);
+        const plugin = this.pluginRegistry.plugins.find(
+          (p) => p.id === currentStep.pluginId
+        );
+
         if (!plugin) {
           // Add error to context chain for missing plugin
           const errorContext: ErrorContextItem = {
@@ -896,7 +901,28 @@ by Uranium Corporation
         }
 
         try {
-          const result = await plugin.execute(currentStep.action, context);
+          const executor = await plugin.executors.find(
+            (e) => e.name === currentStep.action
+          );
+
+          if (!executor) {
+            // Add error to context chain for missing executor
+            const errorContext: ErrorContextItem = {
+              id: `error-${Date.now()}`,
+              pluginId: currentStep.pluginId,
+              type: "error",
+              action: "executor_not_found",
+              content: `Executor ${currentStep.action} not found`,
+              timestamp: Date.now(),
+              error: `Executor ${currentStep.action} not found`,
+              failedStep: currentStep
+            };
+            context.contextChain.push(errorContext);
+            currentStepIndex++;
+            continue;
+          }
+
+          const result = await executor.fn(context);
 
           // Log step execution
           this.logger.debug("step execution completed", {
@@ -948,17 +974,15 @@ by Uranium Corporation
             contextChain: context.contextChain,
             currentStep,
             pipeline: currentPipeline,
-            availablePlugins: this.pluginRegistry
-              .getAllPlugins()
-              .map((plugin) => ({
-                id: plugin.id,
-                name: plugin.name,
-                description: plugin.description,
-                executors: plugin.executors.map((e) => ({
-                  name: e.name,
-                  description: e.description
-                }))
+            availablePlugins: this.pluginRegistry.plugins.map((plugin) => ({
+              id: plugin.id,
+              name: plugin.name,
+              description: plugin.description,
+              executors: plugin.executors.map((e) => ({
+                name: e.name,
+                description: e.description
               }))
+            }))
           });
 
           if (modification.shouldModify && modification.modifiedSteps) {
