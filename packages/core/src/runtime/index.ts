@@ -392,24 +392,22 @@ by Uranium Corporation
 
     this.logger.info("runtime initialized succesfully", {
       type: "runtime.init",
-      metadata: {
-        modelProviders: modelProviders.map((p) => p.id),
-        capabilities: modelManager.getAvailableCapabilities(),
-        memoryProvider: memoryProvider.id,
-        plugins: plugins.map((p) => ({
-          id: p.id,
-          name: p.name,
-          description: p.description,
-          requiredCapabilities: p.requiredCapabilities,
-          triggers: p.triggers.map((t) => ({
-            id: t.name
-          })),
-          execuctors: p.executors.map((e) => ({
-            name: e.name,
-            description: e.description
-          }))
+      modelProviders: modelProviders.map((p) => p.id),
+      capabilities: modelManager.getAvailableCapabilities(),
+      memoryProvider: memoryProvider.id,
+      plugins: plugins.map((p) => ({
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        requiredCapabilities: p.requiredCapabilities,
+        triggers: p.triggers.map((t) => ({
+          id: t.name
+        })),
+        execuctors: p.executors.map((e) => ({
+          name: e.name,
+          description: e.description
         }))
-      }
+      }))
     });
 
     return new Runtime(modelManager, memoryManager, pluginRegistry);
