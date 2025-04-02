@@ -479,9 +479,8 @@ by Uranium Corporation
       await this.runEvaluationLoop();
     } catch (err: unknown) {
       this.isRunning = false;
-
-      const error = err as Error;
-      console.error("Error in evaluation loop:", error);
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.logger.error("error in evaluation loop:", { error: error.message });
       throw error;
     }
   }
