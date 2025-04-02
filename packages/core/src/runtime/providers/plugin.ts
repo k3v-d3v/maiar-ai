@@ -3,52 +3,68 @@ import { Logger } from "winston";
 import { Runtime } from "../";
 import logger from "../../lib/logger";
 import { ICapabilities } from "../managers/model/capability/types";
-import { AgentContext } from "../pipeline/agent";
+import { Executor, Trigger } from "./plugin.types";
 
 /**
- * Result of a plugin execution
- */
-export interface PluginResult {
-  success: boolean;
-  error?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data?: any;
-}
-
-/**
- * Implementation of a plugin executor
- */
-export interface ExecutorImplementation {
-  name: string;
-  description: string;
-  execute: (context: AgentContext) => Promise<PluginResult>;
-}
-
-/**
- * Plugin trigger that listens for events
- */
-export interface Trigger {
-  id: string;
-  start: (context: AgentContext) => void;
-}
-
-/**
- * Base class that all plugins must extend
+ * Abstract base class for defining a plugin.
+ * A plugin consists of triggers, executors, and required capabilities.
  */
 export abstract class Plugin {
+  /** Unique identifier for the plugin. */
   public readonly id: string;
+
+  /** Human-readable name of the plugin. */
   public readonly name: string;
+
+  /** Description of what the plugin does. */
   public readonly description: string;
+
+  /** List of required capabilities the plugin depends on. */
   private _requiredCapabilities: (keyof ICapabilities)[];
 
-  private executorImplementations: ExecutorImplementation[];
-  private triggerImplementations: Trigger[];
+  /** Triggers associated with the plugin. */
+  public triggers: Trigger[];
+
+  /** Executors associated with the plugin. */
+  public executors: Executor[];
+
+  /** The runtime instance assigned to the plugin. */
   private _runtime: Runtime | undefined;
 
+  /**
+   * Retrieves a scoped logger instance for the plugin.
+   * @returns {Logger} A logger with a `plugin.<id>` scope.
+   */
   public get logger(): Logger {
     return logger.child({ scope: `plugin.${this.id}` });
   }
 
+  /**
+   * Retrieves the assigned runtime instance.
+   * @throws {Error} If the runtime is not available.
+   * @returns {Runtime} The plugin's assigned runtime.
+   */
+  public get runtime(): Runtime {
+    if (!this._runtime) throw new Error("Runtime not available");
+    return this._runtime;
+  }
+
+  /**
+   * Retrieves the capabilities required by the plugin.
+   * @returns {(keyof ICapabilities)[]} The array of required capabilities.
+   */
+  public get requiredCapabilities(): (keyof ICapabilities)[] {
+    return this._requiredCapabilities;
+  }
+
+  /**
+   * Creates a new plugin instance.
+   * @param {Object} params - The plugin initialization parameters.
+   * @param {string} params.id - Unique identifier for the plugin.
+   * @param {string} params.name - Human-readable name of the plugin.
+   * @param {string} params.description - Description of the plugin.
+   * @param {(keyof ICapabilities)[]} params.requiredCapabilities - Capabilities required by the plugin.
+   */
   constructor({
     id,
     name,
@@ -63,58 +79,30 @@ export abstract class Plugin {
     this.id = id;
     this.name = name;
     this.description = description;
-    this._requiredCapabilities = requiredCapabilities;
 
-    this.executorImplementations = [];
-    this.triggerImplementations = [];
+    this.executors = [];
+    this.triggers = [];
+    this._requiredCapabilities = requiredCapabilities;
     this._runtime = undefined;
   }
 
-  public init(runtime: Runtime): void {
+  /**
+   * Initializes the plugin. Must be implemented by subclasses.
+   * @returns {Promise<void>} A promise that resolves when initialization is complete.
+   */
+  public abstract init(): Promise<void> | void;
+
+  /**
+   * Shuts down the plugin. Must be implemented by subclasses.
+   * @returns {Promise<void>} A promise that resolves when shutdown is complete.
+   */
+  public abstract shutdown(): Promise<void> | void;
+
+  /**
+   * @internal Sets the runtime for the plugin to be used internally by the runtime only.
+   * @param {Runtime} runtime - The runtime instance to associate with the plugin.
+   */
+  public __setRuntime(runtime: Runtime): void {
     this._runtime = runtime;
-  }
-
-  public addExecutor(executor: ExecutorImplementation): void {
-    this.executorImplementations.push(executor);
-  }
-
-  public addTrigger(trigger: Trigger): void {
-    this.triggerImplementations.push(trigger);
-  }
-
-  public async execute(
-    action: string,
-    context: AgentContext
-  ): Promise<PluginResult> {
-    const executor = this.executorImplementations.find(
-      (e) => e.name === action
-    );
-    if (!executor) {
-      return {
-        success: false,
-        error: `Unsupported executor: ${action}`
-      };
-    }
-    return executor.execute(context);
-  }
-
-  public get runtime(): Runtime {
-    if (!this._runtime) throw new Error("Runtime is not initialized yet");
-    return this._runtime;
-  }
-
-  public get executors(): Omit<ExecutorImplementation, "execute">[] {
-    return this.executorImplementations.map(({ name, description }) => ({
-      name,
-      description
-    }));
-  }
-
-  public get triggers(): Trigger[] {
-    return this.triggerImplementations;
-  }
-
-  public get requiredCapabilities(): (keyof ICapabilities)[] {
-    return this._requiredCapabilities;
   }
 }
