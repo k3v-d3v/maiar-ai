@@ -1,6 +1,6 @@
 import { Telegraf } from "telegraf";
 
-import { AgentContext, Plugin, PluginResult, Runtime } from "@maiar-ai/core";
+import { AgentContext, Plugin, PluginResult } from "@maiar-ai/core";
 
 import { generateResponseTemplate } from "./templates";
 import {
@@ -26,11 +26,13 @@ export class TelegramPlugin extends Plugin {
 
     this.bot = new Telegraf<TelegramContext>(config.token);
 
-    this.addExecutor({
-      name: "send_response",
-      description: "Send a response to a Telegram chat",
-      execute: this.handleSendMessage.bind(this)
-    });
+    this.executors = [
+      {
+        name: "send_response",
+        description: "Send a response to a Telegram chat",
+        fn: this.handleSendMessage.bind(this)
+      }
+    ];
   }
 
   private async handleSendMessage(
@@ -68,9 +70,7 @@ export class TelegramPlugin extends Plugin {
     }
   }
 
-  public async init(runtime: Runtime): Promise<void> {
-    await super.init(runtime);
-
+  public async init(): Promise<void> {
     this.bot.use(async (ctx, next) => {
       ctx.plugin = this;
       return await next();
@@ -107,7 +107,7 @@ export class TelegramPlugin extends Plugin {
     });
   }
 
-  async cleanup(): Promise<void> {
+  public async shutdown(): Promise<void> {
     this.bot.stop();
   }
 }

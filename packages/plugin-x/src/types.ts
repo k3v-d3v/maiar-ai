@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { AgentContext } from "@maiar-ai/core";
-import { ExecutorImplementation, Trigger } from "@maiar-ai/core";
+import { Executor, Trigger } from "@maiar-ai/core";
 import { Runtime } from "@maiar-ai/core";
 
 import { XService } from "./services";
@@ -22,7 +22,7 @@ export interface XPluginConfig {
 
   // Custom executors and triggers
   // Can be either plain implementations or factory functions that will receive XService
-  customExecutors?: (ExecutorImplementation | XExecutorFactory)[];
+  customExecutors?: (Executor | XExecutorFactory)[];
   customTriggers?: (Trigger | XTriggerFactory)[];
 }
 
@@ -46,7 +46,7 @@ export interface TriggerConfig {
 export type XExecutorFactory = (
   service: XService,
   runtime: Runtime
-) => ExecutorImplementation;
+) => Executor;
 
 /**
  * Function that receives XService and config and returns a Trigger

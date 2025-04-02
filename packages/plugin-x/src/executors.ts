@@ -1,9 +1,4 @@
-import {
-  AgentContext,
-  ExecutorImplementation,
-  PluginResult,
-  Runtime
-} from "@maiar-ai/core";
+import { AgentContext, Executor, PluginResult, Runtime } from "@maiar-ai/core";
 
 import { XService } from "./services";
 import { generateTweetTemplate } from "./templates";
@@ -31,10 +26,10 @@ export function createSimpleXExecutor(
     runtime: Runtime
   ) => Promise<PluginResult>
 ): XExecutorFactory {
-  return (service: XService, runtime: Runtime): ExecutorImplementation => ({
+  return (service: XService, runtime: Runtime): Executor => ({
     name,
     description,
-    execute: (context: AgentContext) => execute(context, service, runtime)
+    fn: (context: AgentContext) => execute(context, service, runtime)
   });
 }
 
@@ -43,11 +38,11 @@ export function createSimpleXExecutor(
  * This executor extracts text from the user input and creates a new post
  */
 export const createPostExecutor = createXExecutor(
-  (xService: XService, runtime: Runtime): ExecutorImplementation => {
+  (xService: XService, runtime: Runtime): Executor => {
     return {
       name: "post_tweet",
       description: "Post a tweet on X (Twitter)",
-      execute: async (context: AgentContext): Promise<PluginResult> => {
+      fn: async (context: AgentContext): Promise<PluginResult> => {
         try {
           const tweetTemplate = generateTweetTemplate(context.contextChain);
           const params = await runtime.operations.getObject(
@@ -100,6 +95,6 @@ export const DEFAULT_X_EXECUTORS: XExecutorFactory[] = [createPostExecutor];
 export function createAllCustomExecutors(
   xService: XService,
   runtime: Runtime
-): ExecutorImplementation[] {
+): Executor[] {
   return DEFAULT_X_EXECUTORS.map((factory) => factory(xService, runtime));
 }

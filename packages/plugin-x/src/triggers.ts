@@ -37,7 +37,7 @@ export const periodicPostTrigger = createXTrigger(
     const postTemplate = config?.postTemplate || xPostTemplate;
 
     return {
-      id: "x_periodic_post",
+      name: "x_periodic_post",
       start: (): void => {
         logger.info(`starting x periodic post trigger`, {
           type: "plugin-x.trigger.start",

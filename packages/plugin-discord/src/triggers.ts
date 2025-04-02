@@ -202,7 +202,7 @@ export const postListenerTrigger: DiscordTriggerFactory = (
   }
 
   return {
-    id: "discord_post_listener",
+    name: "discord_post_listener",
     start: (): void => {
       if (!discordService.client.listenerCount(Events.MessageCreate)) {
         discordService.client.on(

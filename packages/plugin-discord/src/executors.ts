@@ -1,11 +1,6 @@
 import { BaseGuildTextChannel } from "discord.js";
 
-import {
-  AgentContext,
-  ExecutorImplementation,
-  PluginResult,
-  Runtime
-} from "@maiar-ai/core";
+import { AgentContext, Executor, PluginResult, Runtime } from "@maiar-ai/core";
 import * as maiarLogger from "@maiar-ai/core/dist/logger";
 
 import { DiscordService } from "./services";
@@ -40,14 +35,10 @@ export function discordExecutorFactory(
     scope: `plugin-discord`
   });
 
-  return (
-    service: DiscordService,
-    runtime: Runtime
-  ): ExecutorImplementation => ({
+  return (service: DiscordService, runtime: Runtime): Executor => ({
     name,
     description,
-    execute: (context: AgentContext) =>
-      execute(context, service, runtime, logger)
+    fn: (context: AgentContext) => execute(context, service, runtime, logger)
   });
 }
 

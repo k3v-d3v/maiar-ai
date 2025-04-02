@@ -1,11 +1,6 @@
 import * as path from "path";
 
-import {
-  ExecutorImplementation,
-  Plugin,
-  Runtime,
-  Trigger
-} from "@maiar-ai/core";
+import { Executor, Plugin, Trigger } from "@maiar-ai/core";
 
 import { createAllCustomExecutors } from "./executors";
 import { runAuthFlow } from "./scripts/auth-flow";
@@ -52,10 +47,7 @@ export class XPlugin extends Plugin {
    * Override parent init to set the runtime and perform plugin initialization
    * This is called by the runtime during system startup
    */
-  async init(runtime: Runtime): Promise<void> {
-    // Call parent init to assign the runtime property
-    await super.init(runtime);
-
+  public async init(): Promise<void> {
     // This log confirms that we're being initialized with a valid runtime
     this.logger.info("plugin x initializing...", { type: "plugin-x" });
 
@@ -155,6 +147,8 @@ export class XPlugin extends Plugin {
     });
   }
 
+  public async shutdown(): Promise<void> {}
+
   /**
    * Register both executors and triggers
    * This is separated from init for clarity and is only called after runtime is available
@@ -168,17 +162,17 @@ export class XPlugin extends Plugin {
     if (this.config.customExecutors) {
       // If customExecutors are provided as factories, instantiate them with xService
       const customExecutors = this.config.customExecutors as (
-        | ExecutorImplementation
+        | Executor
         | XExecutorFactory
       )[];
 
       for (const executorOrFactory of customExecutors) {
         if (typeof executorOrFactory === "function") {
           // It's a factory function, call it with xService and runtime
-          this.addExecutor(executorOrFactory(this.xService, this.runtime));
+          this.executors.push(executorOrFactory(this.xService, this.runtime));
         } else {
           // It's a plain ExecutorImplementation, add it directly
-          this.addExecutor(executorOrFactory);
+          this.executors.push(executorOrFactory);
         }
       }
     } else {
@@ -187,7 +181,7 @@ export class XPlugin extends Plugin {
         this.xService,
         this.runtime
       )) {
-        this.addExecutor(executor);
+        this.executors.push(executor);
       }
     }
 
@@ -203,12 +197,12 @@ export class XPlugin extends Plugin {
         if (typeof triggerOrFactory === "function") {
           // It's a factory function, call it with xService and runtime
           const triggerConfig: TriggerConfig = {};
-          this.addTrigger(
+          this.triggers.push(
             triggerOrFactory(this.xService, this.runtime, triggerConfig)
           );
         } else {
           // It's a plain Trigger, add it directly
-          this.addTrigger(triggerOrFactory);
+          this.triggers.push(triggerOrFactory);
         }
       }
     } else {
@@ -219,7 +213,7 @@ export class XPlugin extends Plugin {
         this.runtime,
         triggerConfig
       )) {
-        this.addTrigger(trigger);
+        this.triggers.push(trigger);
       }
     }
 
@@ -234,19 +228,15 @@ export class XPlugin extends Plugin {
   /**
    * Check if the plugin is authenticated
    */
-  isAuthenticatedWithX(): boolean {
+  public isAuthenticatedWithX(): boolean {
     return this.isAuthenticated;
-  }
-
-  async stop(): Promise<void> {
-    // Cleanup logic will be implemented later
   }
 
   /**
    * Run the authentication flow using the plugin's configuration
    * This can be called directly to authenticate without using environment variables
    */
-  async runAuthentication(): Promise<boolean> {
+  public async runAuthentication(): Promise<boolean> {
     try {
       // Run auth flow with client credentials
       await runAuthFlow({

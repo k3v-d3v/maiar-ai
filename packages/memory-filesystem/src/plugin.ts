@@ -28,189 +28,189 @@ export class FileSystemMemoryPlugin extends Plugin {
     });
     this.sandboxPath = path.join(config.basePath, "sandbox.json");
 
-    this.addExecutor({
-      name: "memory:add_document",
-      description:
-        "Add a peice of context from the context chain into the sandboxed database",
-      execute: async (context: AgentContext): Promise<PluginResult> => {
-        const timestamp = Date.now();
-        const documentId = `doc_${timestamp}_${Math.random().toString(36).slice(9)}`;
+    this.executors = [
+      {
+        name: "memory:add_document",
+        description:
+          "Add a peice of context from the context chain into the sandboxed database",
+        fn: this.addDocument.bind(this)
+      },
+      {
+        name: "memory:remove_document",
+        description: "Remove a piece of information from the sandbox database",
+        fn: this.removeDocument.bind(this)
+      },
+      {
+        name: "memory:query",
+        description:
+          "Query the sandbox database for documents that match the user or plugin requests",
+        fn: this.query.bind(this)
+      }
+    ];
+  }
 
-        // Get data to store in database from context chain
-        const formattedResponse = await this.runtime.operations.getObject(
-          FileSystemMemoryUploadSchema,
-          generateUploadDocumentTemplate(context.contextChain),
-          { temperature: 0.2 }
+  public async init(): Promise<void> {}
+
+  public async shutdown(): Promise<void> {}
+
+  private async addDocument(context: AgentContext): Promise<PluginResult> {
+    const timestamp = Date.now();
+    const documentId = `doc_${timestamp}_${Math.random().toString(36).slice(9)}`;
+
+    // Get data to store in database from context chain
+    const formattedResponse = await this.runtime.operations.getObject(
+      FileSystemMemoryUploadSchema,
+      generateUploadDocumentTemplate(context.contextChain),
+      { temperature: 0.2 }
+    );
+
+    const conversationId = context.conversationId;
+    if (!conversationId) {
+      return {
+        success: false,
+        error: "Conversation ID not available in agent context"
+      };
+    }
+
+    try {
+      let documents = [];
+      try {
+        const existingContent = await fsPromises.readFile(
+          this.sandboxPath,
+          "utf-8"
+        );
+        const existingData = JSON.parse(existingContent);
+        documents = existingData.documents || [];
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          "code" in error &&
+          error.code !== "ENOENT"
+        ) {
+          throw new Error(
+            `An unexpected error occured when trying to add document to database: ${error.message}`
+          );
+        }
+        // Only initialize empty documents array for file not found errors
+        documents = [];
+      }
+
+      // Add new document
+      documents.push({
+        id: documentId,
+        conversation_id: conversationId,
+        content: formattedResponse?.content,
+        timestamp: timestamp
+      });
+
+      // Write updated documents array
+      await fsPromises.writeFile(
+        this.sandboxPath,
+        JSON.stringify(
+          {
+            documents: documents
+          },
+          null,
+          2
+        )
+      );
+
+      return { success: true, data: { documentId } };
+    } catch (error) {
+      return {
+        success: false,
+        error: `Failed to add document: ${error}`
+      };
+    }
+  }
+
+  private async removeDocument(context: AgentContext): Promise<PluginResult> {
+    try {
+      const fileContent = await fsPromises.readFile(this.sandboxPath, "utf-8");
+      const sandboxData = JSON.parse(fileContent);
+      const documents: FileSystemMemoryDocument[] = sandboxData.documents || [];
+
+      // Get query criteria from context chain
+      const queryFormattedResponse = await this.runtime.operations.getObject(
+        FileSystemQuerySchema,
+        generateQueryTemplate(context.contextChain),
+        { temperature: 0.2 }
+      );
+
+      // Filter documents using query
+      const remainingDocuments = documents.filter(
+        (doc) => !this.matchesQuery(doc, queryFormattedResponse)
+      );
+
+      if (remainingDocuments.length < documents.length) {
+        await fsPromises.writeFile(
+          this.sandboxPath,
+          JSON.stringify({ documents: remainingDocuments }, null, 2)
         );
 
-        const conversationId = context.conversationId;
-        if (!conversationId) {
-          return {
-            success: false,
-            error: "Conversation ID not available in agent context"
-          };
-        }
-
-        try {
-          let documents = [];
-          try {
-            const existingContent = await fsPromises.readFile(
-              this.sandboxPath,
-              "utf-8"
-            );
-            const existingData = JSON.parse(existingContent);
-            documents = existingData.documents || [];
-          } catch (error) {
-            if (
-              error instanceof Error &&
-              "code" in error &&
-              error.code !== "ENOENT"
-            ) {
-              throw new Error(
-                `An unexpected error occured when trying to add document to database: ${error.message}`
-              );
-            }
-            // Only initialize empty documents array for file not found errors
-            documents = [];
-          }
-
-          // Add new document
-          documents.push({
-            id: documentId,
-            conversation_id: conversationId,
-            content: formattedResponse?.content,
-            timestamp: timestamp
-          });
-
-          // Write updated documents array
-          await fsPromises.writeFile(
-            this.sandboxPath,
-            JSON.stringify(
-              {
-                documents: documents
-              },
-              null,
-              2
-            )
-          );
-
-          return { success: true, data: { documentId } };
-        } catch (error) {
-          return {
-            success: false,
-            error: `Failed to add document: ${error}`
-          };
-        }
+        return {
+          success: true,
+          data: { documentIds: remainingDocuments.map((doc) => doc.id) }
+        };
       }
-    });
 
-    this.addExecutor({
-      name: "memory:remove_document",
-      description: "Remove a piece of information from the sandbox database",
-      execute: async (context: AgentContext): Promise<PluginResult> => {
-        try {
-          const fileContent = await fsPromises.readFile(
-            this.sandboxPath,
-            "utf-8"
-          );
-          const sandboxData = JSON.parse(fileContent);
-          const documents: FileSystemMemoryDocument[] =
-            sandboxData.documents || [];
-
-          // Get query criteria from context chain
-          const queryFormattedResponse =
-            await this.runtime.operations.getObject(
-              FileSystemQuerySchema,
-              generateQueryTemplate(context.contextChain),
-              { temperature: 0.2 }
-            );
-
-          // Filter documents using query
-          const remainingDocuments = documents.filter(
-            (doc) => !this.matchesQuery(doc, queryFormattedResponse)
-          );
-
-          if (remainingDocuments.length < documents.length) {
-            await fsPromises.writeFile(
-              this.sandboxPath,
-              JSON.stringify({ documents: remainingDocuments }, null, 2)
-            );
-
-            return {
-              success: true,
-              data: { documentIds: remainingDocuments.map((doc) => doc.id) }
-            };
-          }
-
-          return {
-            success: false,
-            data: {
-              message: "No documents found matching the query criteria"
-            }
-          };
-        } catch (error) {
-          if (error instanceof Error) {
-            return {
-              success: false,
-              data: {
-                message: `Error removing document: ${error.message}`
-              }
-            };
-          }
-          throw error;
+      return {
+        success: false,
+        data: {
+          message: "No documents found matching the query criteria"
         }
-      }
-    });
-
-    this.addExecutor({
-      name: "memory:query",
-      description:
-        "Query the sandbox database for documents that match the user or plugin requests",
-      execute: async (context: AgentContext): Promise<PluginResult> => {
-        try {
-          const fileContent = await fsPromises.readFile(
-            this.sandboxPath,
-            "utf-8"
-          );
-          const sandboxData = JSON.parse(fileContent);
-          const documents: FileSystemMemoryDocument[] =
-            sandboxData.documents || [];
-
-          // Get query criteria from context chain
-          const queryFormattedResponse =
-            await this.runtime.operations.getObject(
-              FileSystemQuerySchema,
-              generateQueryTemplate(context.contextChain),
-              { temperature: 0.2 }
-            );
-
-          // Find all matching documents
-          const matchingDocuments = documents.filter((doc) =>
-            this.matchesQuery(doc, queryFormattedResponse)
-          );
-
-          return {
-            success: true,
-            data: {
-              results: matchingDocuments.map((doc) => ({
-                id: doc.id,
-                content: doc.content
-              }))
-            }
-          };
-        } catch (error) {
-          if (error instanceof Error) {
-            return {
-              success: false,
-              data: {
-                message: `Error querying documents: ${error.message}`
-              }
-            };
+      };
+    } catch (error) {
+      if (error instanceof Error) {
+        return {
+          success: false,
+          data: {
+            message: `Error removing document: ${error.message}`
           }
-          throw error;
-        }
+        };
       }
-    });
+      throw error;
+    }
+  }
+
+  private async query(context: AgentContext): Promise<PluginResult> {
+    try {
+      const fileContent = await fsPromises.readFile(this.sandboxPath, "utf-8");
+      const sandboxData = JSON.parse(fileContent);
+      const documents: FileSystemMemoryDocument[] = sandboxData.documents || [];
+
+      // Get query criteria from context chain
+      const queryFormattedResponse = await this.runtime.operations.getObject(
+        FileSystemQuerySchema,
+        generateQueryTemplate(context.contextChain),
+        { temperature: 0.2 }
+      );
+
+      // Find all matching documents
+      const matchingDocuments = documents.filter((doc) =>
+        this.matchesQuery(doc, queryFormattedResponse)
+      );
+
+      return {
+        success: true,
+        data: {
+          results: matchingDocuments.map((doc) => ({
+            id: doc.id,
+            content: doc.content
+          }))
+        }
+      };
+    } catch (error) {
+      if (error instanceof Error) {
+        return {
+          success: false,
+          data: {
+            message: `Error querying documents: ${error.message}`
+          }
+        };
+      }
+      throw error;
+    }
   }
 
   // Helper method for query filtering

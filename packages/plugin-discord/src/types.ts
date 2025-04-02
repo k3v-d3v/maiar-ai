@@ -1,11 +1,6 @@
 import { z } from "zod";
 
-import {
-  AgentContext,
-  ExecutorImplementation,
-  Runtime,
-  Trigger
-} from "@maiar-ai/core";
+import { AgentContext, Executor, Runtime, Trigger } from "@maiar-ai/core";
 
 import { DiscordService } from "./services";
 
@@ -92,13 +87,13 @@ export const MessageIntentSchema = z.object({
 export type MessageIntent = z.infer<typeof MessageIntentSchema>;
 
 /**
- * Function that receives XService and returns an ExecutorImplementation
+ * Function that receives XService and returns an Executor
  * This allows for dependency injection of the XService
  */
 export type DiscordExecutorFactory = (
   service: DiscordService,
   runtime: Runtime
-) => ExecutorImplementation;
+) => Executor;
 
 /**
  * Function that receives XService and config and returns a Trigger

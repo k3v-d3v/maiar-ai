@@ -1,7 +1,12 @@
 import * as fs from "fs";
 import * as net from "net";
 
-import { Plugin, PluginResult, UserInputContext } from "@maiar-ai/core";
+import {
+  AgentContext,
+  Plugin,
+  PluginResult,
+  UserInputContext
+} from "@maiar-ai/core";
 
 import { CHAT_SOCKET_PATH } from "./index";
 import { generateResponseTemplate } from "./templates";
@@ -32,163 +37,179 @@ export class TerminalPlugin extends Plugin {
     process.on("SIGTERM", () => this.cleanup());
     process.on("exit", () => this.cleanup());
 
-    this.addExecutor({
-      name: "send_response",
-      description: "Send a response to connected terminal clients",
-      execute: async (context): Promise<PluginResult> => {
-        const platformContext =
-          context?.platformContext as TerminalPlatformContext;
-        if (!platformContext?.responseHandler) {
-          console.error(
-            "[Terminal Plugin] Error: No response handler available"
-          );
-          return {
-            success: false,
-            error: "No response handler available"
-          };
+    this.executors = [
+      {
+        name: "send_response",
+        description: "Send a response to connected terminal clients",
+        fn: this.sendResponse.bind(this)
+      }
+    ];
+
+    this.triggers = [
+      {
+        name: "terminal_server",
+        start: this.startServer.bind(this)
+      }
+    ];
+  }
+
+  private async sendResponse(context: AgentContext): Promise<PluginResult> {
+    const platformContext = context?.platformContext as TerminalPlatformContext;
+    if (!platformContext?.responseHandler) {
+      this.logger.error("no response handler available");
+      return {
+        success: false,
+        error: "No response handler available"
+      };
+    }
+
+    try {
+      // Format the response based on the context chain
+      const formattedResponse = await this.runtime.operations.getObject(
+        TerminalResponseSchema,
+        generateResponseTemplate(context.contextChain),
+        { temperature: 0.2 }
+      );
+
+      await platformContext.responseHandler(formattedResponse.message);
+      return {
+        success: true,
+        data: {
+          message: formattedResponse.message,
+          helpfulInstruction:
+            "This is the formatted response sent to the terminal"
         }
+      };
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.logger.error("error sending response:", { error: err.message });
+      return {
+        success: false,
+        error: "Failed to send response"
+      };
+    }
+  }
 
-        try {
-          // Format the response based on the context chain
-          const formattedResponse = await this.runtime.operations.getObject(
-            TerminalResponseSchema,
-            generateResponseTemplate(context.contextChain),
-            { temperature: 0.2 }
-          );
+  private async startServer(): Promise<void> {
+    this.logger.info("starting terminal server...");
 
-          await platformContext.responseHandler(formattedResponse.message);
-          return {
-            success: true,
-            data: {
-              message: formattedResponse.message,
-              helpfulInstruction:
-                "This is the formatted response sent to the terminal"
+    if (this.server) {
+      this.logger.warn("terminal server already running");
+      return;
+    }
+
+    // Remove existing socket file if it exists
+    this.cleanup();
+
+    try {
+      this.server = net.createServer((socket) => {
+        this.logger.info("new client connected");
+        this.clients.add(socket);
+
+        socket.on("data", async (data) => {
+          try {
+            const { message, user, type } = JSON.parse(data.toString());
+            if (!message && !type) return;
+
+            // Handle config request from chat client
+            if (type === "get_config") {
+              socket.write(JSON.stringify(this.config));
+              return;
             }
-          };
-        } catch (error) {
-          console.error("[Terminal Plugin] Error sending response:", error);
-          return {
-            success: false,
-            error: "Failed to send response"
-          };
-        }
-      }
-    });
 
-    this.addTrigger({
-      id: "terminal_server",
-      start: () => {
-        console.log("[Terminal Plugin] Starting terminal server...");
+            this.logger.info(`received message from ${user}`, {
+              user,
+              message
+            });
 
-        if (this.server) {
-          console.warn("[Terminal Plugin] Terminal server already running");
-          return;
-        }
+            // Create new context chain with initial user input
+            const initialContext: UserInputContext = {
+              id: `${this.id}-${Date.now()}`,
+              pluginId: this.id,
+              action: "receive_message",
+              type: "user_input",
+              content: message,
+              timestamp: Date.now(),
+              rawMessage: message,
+              user: user || "local"
+            };
 
-        // Remove existing socket file if it exists
-        this.cleanup();
+            // Create response handler that handles type conversion
+            const responseHandler = (response: unknown) => {
+              const responseStr =
+                typeof response === "string"
+                  ? response
+                  : JSON.stringify(response);
 
-        try {
-          this.server = net.createServer((socket) => {
-            console.log("[Terminal Plugin] New client connected");
-            this.clients.add(socket);
+              this.logger.info(`sending response to clients`, {
+                response: responseStr
+              });
 
-            socket.on("data", async (data) => {
-              try {
-                const { message, user, type } = JSON.parse(data.toString());
-                if (!message && !type) return;
-
-                // Handle config request from chat client
-                if (type === "get_config") {
-                  socket.write(JSON.stringify(this.config));
-                  return;
-                }
-
-                console.log(
-                  `[Terminal Plugin] Received message from ${user}: ${message}`
+              for (const client of this.clients) {
+                client.write(
+                  JSON.stringify({
+                    message: responseStr,
+                    user: "maiar"
+                  }) + "\n"
                 );
-
-                // Create new context chain with initial user input
-                const initialContext: UserInputContext = {
-                  id: `${this.id}-${Date.now()}`,
-                  pluginId: this.id,
-                  action: "receive_message",
-                  type: "user_input",
-                  content: message,
-                  timestamp: Date.now(),
-                  rawMessage: message,
-                  user: user || "local"
-                };
-
-                // Create response handler that handles type conversion
-                const responseHandler = (response: unknown) => {
-                  const responseStr =
-                    typeof response === "string"
-                      ? response
-                      : JSON.stringify(response);
-
-                  console.log(
-                    `[Terminal Plugin] Sending response to clients: ${responseStr}`
-                  );
-
-                  for (const client of this.clients) {
-                    client.write(
-                      JSON.stringify({
-                        message: responseStr,
-                        user: "maiar"
-                      }) + "\n"
-                    );
-                  }
-                };
-
-                // Create event with initial context and response handler
-                const platformContext: TerminalPlatformContext = {
-                  platform: this.id,
-                  responseHandler,
-                  metadata: {
-                    helpfulInstruction:
-                      "This is a terminal chat message. This means you must send a response to the user in the terminal as the very last action you perform. It is called send_response under the plugin-terminal namespace."
-                  }
-                };
-
-                await this.runtime.createEvent(initialContext, platformContext);
-              } catch (error) {
-                console.error(
-                  "[Terminal Plugin] Error processing message:",
-                  error
-                );
-                socket.write("Error processing message. Please try again.\n");
               }
+            };
+
+            // Create event with initial context and response handler
+            const platformContext: TerminalPlatformContext = {
+              platform: this.id,
+              responseHandler,
+              metadata: {
+                helpfulInstruction:
+                  "This is a terminal chat message. This means you must send a response to the user in the terminal as the very last action you perform. It is called send_response under the plugin-terminal namespace."
+              }
+            };
+
+            await this.runtime.createEvent(initialContext, platformContext);
+          } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            this.logger.error("error processing message:", {
+              error: error.message
             });
+            socket.write("Error processing message. Please try again.\n");
+          }
+        });
 
-            socket.on("end", () => {
-              console.log("[Terminal Plugin] Client disconnected");
-              this.clients.delete(socket);
-            });
+        socket.on("end", () => {
+          this.logger.info("client disconnected");
+          this.clients.delete(socket);
+        });
 
-            socket.on("error", (error) => {
-              console.error("[Terminal Plugin] Socket error:", error);
-              this.clients.delete(socket);
-            });
-          });
+        socket.on("error", (error) => {
+          this.logger.error("socket error:", { error: error.message });
+          this.clients.delete(socket);
+        });
+      });
 
-          this.server.listen(CHAT_SOCKET_PATH, () => {
-            // Set socket permissions to be readable/writable by all users
-            fs.chmodSync(CHAT_SOCKET_PATH, 0o666);
-            console.log(
-              `[Terminal Plugin] Server listening on ${CHAT_SOCKET_PATH}`
-            );
-            console.log("[Terminal Plugin] To connect, run: pnpm maiar-chat");
-          });
+      this.server.listen(CHAT_SOCKET_PATH, () => {
+        // Set socket permissions to be readable/writable by all users
+        fs.chmodSync(CHAT_SOCKET_PATH, 0o666);
+        this.logger.info(`server listening on ${CHAT_SOCKET_PATH}`, {
+          socketPath: CHAT_SOCKET_PATH
+        });
+        this.logger.info("to connect, run: pnpm maiar-chat");
+      });
 
-          this.server.on("error", (error) => {
-            console.error("[Terminal Plugin] Server error:", error);
-          });
-        } catch (error) {
-          console.error("[Terminal Plugin] Failed to start server:", error);
-        }
-      }
-    });
+      this.server.on("error", (error) => {
+        this.logger.error("server error:", { error: error.message });
+      });
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.logger.error("failed to start server:", { error: error.message });
+    }
+  }
+
+  public async init(): Promise<void> {}
+
+  public async shutdown(): Promise<void> {
+    if (fs.existsSync(CHAT_SOCKET_PATH)) {
+      fs.unlinkSync(CHAT_SOCKET_PATH);
+    }
   }
 
   private cleanup(): void {

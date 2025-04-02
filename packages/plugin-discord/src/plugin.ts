@@ -1,4 +1,4 @@
-import { Plugin, Runtime } from "@maiar-ai/core";
+import { Plugin } from "@maiar-ai/core";
 
 import { DiscordService } from "./services";
 import { DiscordExecutorFactory, DiscordTriggerFactory } from "./types";
@@ -46,9 +46,7 @@ export class DiscordPlugin extends Plugin {
     });
   }
 
-  public async init(runtime: Runtime): Promise<void> {
-    await super.init(runtime);
-
+  public async init(): Promise<void> {
     await this.discordService.login();
 
     setTimeout(() => {
@@ -63,19 +61,19 @@ export class DiscordPlugin extends Plugin {
     this.registerTriggers();
   }
 
-  public async cleanup(): Promise<void> {
+  public async shutdown(): Promise<void> {
     await this.discordService.cleanUp();
   }
 
   private registerExecutors(): void {
     for (const executorFactory of this.executorFactories) {
-      this.addExecutor(executorFactory(this.discordService, this.runtime));
+      this.executors.push(executorFactory(this.discordService, this.runtime));
     }
   }
 
   private registerTriggers(): void {
     for (const triggerFactory of this.triggerFactories) {
-      this.addTrigger(
+      this.triggers.push(
         triggerFactory(this.discordService, this.runtime, {
           commandPrefix: this.commandPrefix
         })
