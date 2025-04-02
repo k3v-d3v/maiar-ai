@@ -410,7 +410,27 @@ by Uranium Corporation
       }))
     });
 
-    return new Runtime(modelManager, memoryManager, pluginRegistry);
+    const runtime = new Runtime(modelManager, memoryManager, pluginRegistry);
+
+    process.on("SIGINT", async () => {
+      console.log();
+      runtime.logger.info("runtime received SIGINT signal", {
+        type: "runtime.sigint"
+      });
+      await runtime.stop();
+      process.exit(0);
+    });
+
+    process.on("SIGTSTP", async () => {
+      console.log();
+      runtime.logger.info("runtime received SIGTSTP signal", {
+        type: "runtime.sigtstp"
+      });
+      await runtime.stop();
+      process.exit(0);
+    });
+
+    return runtime;
   }
 
   /**
@@ -488,9 +508,12 @@ by Uranium Corporation
    */
   public async stop(): Promise<void> {
     this.isRunning = false;
-    this.logger.info("ai agent (powered by $MAIAR) runtime shutting down...", {
-      type: "runtime.stop"
-    });
+    this.logger.info(
+      "ai agent (powered by $MAIAR) runtime shutting down gracefully...",
+      {
+        type: "runtime.stop"
+      }
+    );
 
     for (const plugin of this.pluginRegistry.plugins) {
       await this.pluginRegistry.unregisterPlugin(plugin);
