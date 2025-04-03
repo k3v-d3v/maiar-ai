@@ -10,7 +10,7 @@ import { ICapabilities } from "./capability/types";
  * ModelManager is responsible for managing model instances and their capabilities
  */
 export class ModelManager {
-  private models: Map<string, ModelProvider>;
+  private _modelProviders: Map<string, ModelProvider>;
   private capabilityRegistry: CapabilityRegistry;
   private capabilityAliases: Map<string, string>;
 
@@ -18,21 +18,73 @@ export class ModelManager {
     return logger.child({ scope: "model.manager" });
   }
 
-  constructor(...models: ModelProvider[]) {
-    this.models = new Map<string, ModelProvider>();
+  public get modelProviders(): ModelProvider[] {
+    return Array.from(this._modelProviders.values());
+  }
+
+  constructor() {
+    this._modelProviders = new Map<string, ModelProvider>();
     this.capabilityRegistry = new CapabilityRegistry();
     this.capabilityAliases = new Map<string, string>();
-
-    for (const model of models) {
-      this.registerModel(model);
-    }
   }
 
   /**
    * Register a model
    */
-  private registerModel(modelProvider: ModelProvider): void {
-    this.models.set(modelProvider.id, modelProvider);
+  public async registerModel(modelProvider: ModelProvider): Promise<void> {
+    try {
+      await modelProvider.init();
+      this.logger.info(
+        `model provider "${modelProvider.id}" initialized successfully`,
+        {
+          type: "model.provider.init.success",
+          modelProvider: modelProvider.id
+        }
+      );
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.logger.error(
+        `model provider "${modelProvider.id}" initialization failed`,
+        {
+          type: "model.provider.init.failed",
+          modelProvider: modelProvider.id,
+          error: error.message
+        }
+      );
+
+      throw err;
+    }
+
+    try {
+      await modelProvider.checkHealth();
+      this.logger.info(
+        `model provider "${modelProvider.id}" health check passed`,
+        {
+          type: "model.provider.healthcheck.passed",
+          modelProvider: modelProvider.id
+        }
+      );
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.logger.error(
+        `model provider "${modelProvider.id}" health check failed`,
+        {
+          type: "model.provider.healthcheck.failed",
+          modelProvider: modelProvider.id,
+          error: error.message
+        }
+      );
+
+      throw err;
+    }
+
+    this.logger.info(
+      `model provider "${modelProvider.id}" registered successfully`,
+      {
+        type: "model.provider.registered",
+        modelProvider: modelProvider.id
+      }
+    );
 
     // Register all capabilities provided by the model
     const capabilities = modelProvider.getCapabilities();
@@ -60,6 +112,7 @@ export class ModelManager {
       }
     }
 
+    this._modelProviders.set(modelProvider.id, modelProvider);
     this.logger.debug(
       `model provider "${modelProvider.id}" registered successfully`,
       {
@@ -68,28 +121,34 @@ export class ModelManager {
     );
   }
 
-  public async init(): Promise<void> {
-    await Promise.all(
-      Array.from(this.models.values()).map(async (modelProvider) => {
-        try {
-          await modelProvider.init();
-          this.logger.debug(
-            `model provider initialized successfully for "${modelProvider.id}"`,
-            {
-              type: "model.provider.initialization.success"
-            }
-          );
-        } catch (err: unknown) {
-          const error = err instanceof Error ? err : new Error(String(err));
-          this.logger.error(
-            `model provider initialization failed for "${modelProvider.id}"`,
-            {
-              type: "model.provider.initialization.failed",
-              error: error.message
-            }
-          );
+  public async unregisterModel(modelProvider: ModelProvider): Promise<void> {
+    try {
+      await modelProvider.shutdown();
+      this.logger.info(
+        `model provider "${modelProvider.id}" shutdown successfully`,
+        {
+          type: "model.provider.shutdown.success"
         }
-      })
+      );
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.logger.error(
+        `model provider "${modelProvider.id}" shutdown failed`,
+        {
+          type: "model.provider.shutdown.failed",
+          error: error.message
+        }
+      );
+
+      throw err;
+    }
+
+    this._modelProviders.delete(modelProvider.id);
+    this.logger.debug(
+      `model provider "${modelProvider.id}" unregistered successfully`,
+      {
+        type: "model.provider.unregistered"
+      }
     );
   }
 
@@ -137,7 +196,7 @@ export class ModelManager {
       );
     }
 
-    const modelProvider = this.models.get(effectiveModelId);
+    const modelProvider = this._modelProviders.get(effectiveModelId);
     if (!modelProvider) {
       throw new Error(`Unknown model: ${effectiveModelId}`);
     }
@@ -195,32 +254,5 @@ export class ModelManager {
   public hasCapability(capabilityId: string): boolean {
     const resolvedId = this.capabilityAliases.get(capabilityId) || capabilityId;
     return this.capabilityRegistry.hasCapability(resolvedId);
-  }
-
-  public async checkHealth(): Promise<void> {
-    await Promise.all(
-      Array.from(this.models.values()).map(async (model) => {
-        try {
-          await model.checkHealth();
-          this.logger.debug(
-            `health check for model provider ${model.id} passed`,
-            {
-              type: "model.healthcheck.passed"
-            }
-          );
-        } catch (err: unknown) {
-          const error = err instanceof Error ? err : new Error(String(err));
-          this.logger.error(
-            `health check for model provider ${model.id} failed`,
-            {
-              type: "model.healthcheck.failed",
-              error: error.message
-            }
-          );
-
-          throw error;
-        }
-      })
-    );
   }
 }

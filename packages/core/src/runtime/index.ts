@@ -318,9 +318,10 @@ by Uranium Corporation
     `);
     this.logger.info("runtime initializing...");
 
-    const modelManager = new ModelManager(...modelProviders);
-    await modelManager.init();
-    await modelManager.checkHealth();
+    const modelManager = new ModelManager();
+    for (const modelProvider of modelProviders) {
+      await modelManager.registerModel(modelProvider);
+    }
 
     const memoryManager = new MemoryManager();
     await memoryManager.registerMemoryProvider(memoryProvider);
@@ -521,6 +522,10 @@ by Uranium Corporation
     }
 
     await this.memoryManager.unregisterMemoryProvider();
+
+    for (const modelProvider of this.modelManager.modelProviders) {
+      await this.modelManager.unregisterModel(modelProvider);
+    }
   }
 
   /**
