@@ -322,7 +322,8 @@ by Uranium Corporation
     await modelManager.init();
     await modelManager.checkHealth();
 
-    const memoryManager = new MemoryManager(memoryProvider);
+    const memoryManager = new MemoryManager();
+    await memoryManager.registerMemoryProvider(memoryProvider);
 
     const pluginRegistry = new PluginRegistry();
     await pluginRegistry.registerPlugin(memoryProvider.getPlugin());
@@ -518,6 +519,8 @@ by Uranium Corporation
     for (const plugin of this.pluginRegistry.plugins) {
       await this.pluginRegistry.unregisterPlugin(plugin);
     }
+
+    await this.memoryManager.unregisterMemoryProvider();
   }
 
   /**
