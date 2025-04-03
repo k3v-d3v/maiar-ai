@@ -24,9 +24,16 @@ export class FileSystemMemoryProvider extends MemoryProvider {
       description: "Stores conversations as JSON files in the filesystem"
     });
     this.basePath = config.basePath;
-    this.initializeStorage();
     this.plugin = new FileSystemMemoryPlugin(config);
   }
+
+  public async init(): Promise<void> {
+    await this.initializeStorage();
+  }
+
+  public checkHealth(): void {}
+
+  public shutdown(): void {}
 
   private async initializeStorage() {
     try {

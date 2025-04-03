@@ -35,12 +35,14 @@ export class PostgresMemoryProvider extends MemoryProvider {
     poolInstance.init(config);
     // Get the pool safely after initialization
     this.pool = poolInstance.getPool();
-    this.initializeStorage();
-    this.checkHealth();
     this.plugin = new PostgresMemoryPlugin();
   }
 
-  private async checkHealth() {
+  public async init(): Promise<void> {
+    await this.initializeStorage();
+  }
+
+  public async checkHealth() {
     try {
       const client = await this.pool.connect();
       try {
@@ -60,6 +62,10 @@ export class PostgresMemoryProvider extends MemoryProvider {
         `Failed to initialize PostgreSQL database: ${error instanceof Error ? error.message : String(error)}`
       );
     }
+  }
+
+  public async shutdown(): Promise<void> {
+    await this.pool.end();
   }
 
   private async initializeStorage() {

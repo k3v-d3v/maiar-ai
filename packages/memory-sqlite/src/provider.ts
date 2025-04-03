@@ -24,6 +24,7 @@ type JSONValue =
   | { [key: string]: JSONValue };
 
 export class SQLiteMemoryProvider extends MemoryProvider {
+  private config: SQLiteConfig;
   private db: Database.Database;
   private plugin: SQLiteMemoryPlugin;
 
@@ -33,19 +34,20 @@ export class SQLiteMemoryProvider extends MemoryProvider {
       name: "SQLite Memory",
       description: "Stores conversations in a SQLite database"
     });
-    const dbDir = path.dirname(config.dbPath);
-    fs.mkdirSync(dbDir, { recursive: true });
-
-    const dbInstance = SQLiteDatabase.getInstance();
-    dbInstance.init(config);
-    this.db = dbInstance.getDatabase();
-    this.db.exec("PRAGMA foreign_keys = ON;");
-    this.initializeStorage();
-    this.checkHealth();
+    this.config = config;
+    SQLiteDatabase.getInstance().init(this.config);
+    this.db = SQLiteDatabase.getInstance().getDatabase();
     this.plugin = new SQLiteMemoryPlugin();
   }
 
-  private checkHealth() {
+  public init(): void {
+    const dbDir = path.dirname(this.config.dbPath);
+    fs.mkdirSync(dbDir, { recursive: true });
+    this.initializeStorage();
+    this.db.exec("PRAGMA foreign_keys = ON;");
+  }
+
+  public checkHealth(): void {
     try {
       this.db.prepare("SELECT 1").get();
       this.db.transaction(() => {})();
@@ -67,6 +69,10 @@ export class SQLiteMemoryProvider extends MemoryProvider {
         `Failed to initialize SQLite database: ${error instanceof Error ? error.message : String(error)}`
       );
     }
+  }
+
+  public shutdown(): void {
+    this.db.close();
   }
 
   private initializeStorage() {
