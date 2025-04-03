@@ -61,6 +61,24 @@ export abstract class MemoryProvider {
     this.description = description;
   }
 
+  /**
+   * Initializes the memory provider. Must be implemented by subclasses.
+   * @returns {Promise<void>} A promise that resolves when initialization is complete.
+   */
+  public abstract init(): Promise<void> | void;
+
+  /**
+   * Checks the health of the memory provider. Must be implemented by subclasses.
+   * @returns {Promise<void>} A promise that resolves when health check is complete.
+   */
+  public abstract checkHealth(): Promise<void> | void;
+
+  /**
+   * Shuts down the memory provider. Must be implemented by subclasses.
+   * @returns {Promise<void>} A promise that resolves when shutdown is complete.
+   */
+  public abstract shutdown(): Promise<void> | void;
+
   // Get memory plugin
   public abstract getPlugin(): Plugin;
 
