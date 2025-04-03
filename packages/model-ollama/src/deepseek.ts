@@ -32,7 +32,11 @@ export class DeepseekModelProvider extends ModelProvider {
   private model: string;
 
   constructor(config: DeepseekConfig) {
-    super(PROVIDER_ID, PROVIDER_NAME, PROVIDER_DESCRIPTION);
+    super({
+      id: PROVIDER_ID,
+      name: PROVIDER_NAME,
+      description: PROVIDER_DESCRIPTION
+    });
     if (!config.baseUrl) {
       throw new Error("baseUrl is required");
     }
@@ -52,9 +56,7 @@ export class DeepseekModelProvider extends ModelProvider {
     });
   }
 
-  public async init(): Promise<void> {
-    // Nothing to init
-  }
+  public async init(): Promise<void> {}
 
   public async checkHealth(): Promise<void> {
     const prefix = "deepseek-";
@@ -83,6 +85,8 @@ export class DeepseekModelProvider extends ModelProvider {
       throw error;
     }
   }
+
+  public async shutdown(): Promise<void> {}
 
   public async generateText(
     prompt: string,

@@ -44,7 +44,11 @@ export class OpenAIModelProvider extends ModelProvider {
   private models: OpenAIModel[];
 
   constructor(config: OpenAIConfig) {
-    super(PROVIDER_ID, PROVIDER_NAME, PROVIDER_DESCRIPTION);
+    super({
+      id: PROVIDER_ID,
+      name: PROVIDER_NAME,
+      description: PROVIDER_DESCRIPTION
+    });
     this.client = new OpenAI({ apiKey: config.apiKey });
     this.models = config.models;
 
@@ -87,7 +91,30 @@ export class OpenAIModelProvider extends ModelProvider {
     }
   }
 
-  async generateImage(
+  public async init(): Promise<void> {}
+
+  public async checkHealth(): Promise<void> {
+    // Verifying if we can call the API
+    try {
+      await this.executeCapability(
+        TEXT_GENERATION_CAPABILITY_ID,
+        "[SYSTEM HEALTH CHECK] are you alive? please response with 'yes' only",
+        {
+          temperature: 0.7,
+          maxTokens: 5
+        }
+      );
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      throw new Error(
+        `health check failed for model provider ${this.id}: ${error.message}`
+      );
+    }
+  }
+
+  public async shutdown(): Promise<void> {}
+
+  public async generateImage(
     prompt: string,
     config?: OpenAIModelRequestConfig
   ): Promise<z.infer<typeof imageGenerationSchema.output>> {
@@ -111,7 +138,7 @@ export class OpenAIModelProvider extends ModelProvider {
     return filteredUrls;
   }
 
-  async generateText(
+  public async generateText(
     prompt: string,
     config?: ModelRequestConfig
   ): Promise<z.infer<typeof textGenerationSchema.output>> {
@@ -157,29 +184,6 @@ export class OpenAIModelProvider extends ModelProvider {
       });
 
       throw error;
-    }
-  }
-
-  async init(): Promise<void> {
-    // Nothing to init
-  }
-
-  async checkHealth(): Promise<void> {
-    // Verifying if we can call the API
-    try {
-      await this.executeCapability(
-        TEXT_GENERATION_CAPABILITY_ID,
-        "[SYSTEM HEALTH CHECK] are you alive? please response with 'yes' only",
-        {
-          temperature: 0.7,
-          maxTokens: 5
-        }
-      );
-    } catch (err: unknown) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      throw new Error(
-        `health check failed for model provider ${this.id}: ${error.message}`
-      );
     }
   }
 }

@@ -25,7 +25,11 @@ export class OllamaModelProvider extends ModelProvider {
   private model: string;
 
   constructor(config: OllamaConfig) {
-    super(PROVIDER_ID, PROVIDER_NAME, PROVIDER_DESCRIPTION);
+    super({
+      id: PROVIDER_ID,
+      name: PROVIDER_NAME,
+      description: PROVIDER_DESCRIPTION
+    });
     if (!config.baseUrl) {
       throw new Error("baseUrl is required");
     }
@@ -84,15 +88,13 @@ export class OllamaModelProvider extends ModelProvider {
     }
   }
 
-  async init(): Promise<void> {
-    // Nothing to init
-  }
+  public async init(): Promise<void> {}
 
   /**
    * Make sure that the provided baseUrl returns the /api/models endpoint successfully
    * and there is at least 1 model deployed on the server.
    */
-  async checkHealth(): Promise<void> {
+  public async checkHealth(): Promise<void> {
     try {
       // Send a GET request to the tag endpoint and verify if the model exists
       await verifyBasicHealth(this.baseUrl, this.model);
@@ -113,4 +115,6 @@ export class OllamaModelProvider extends ModelProvider {
       throw error;
     }
   }
+
+  public async shutdown(): Promise<void> {}
 }
