@@ -14,14 +14,114 @@ import {
  * MemoryManager is responsbile delegating memory operations to the MemoryProvider
  */
 export class MemoryManager {
-  private provider: MemoryProvider;
+  private _memoryProvider: MemoryProvider | undefined;
 
   public get logger(): Logger {
     return logger.child({ scope: "memory.manager" });
   }
 
-  constructor(provider: MemoryProvider) {
-    this.provider = provider;
+  public get memoryProvider(): MemoryProvider {
+    if (!this._memoryProvider) {
+      throw new Error("Memory provider not registered yet");
+    }
+    return this._memoryProvider;
+  }
+
+  constructor() {
+    this._memoryProvider = undefined;
+  }
+
+  public async registerMemoryProvider(
+    memoryProvider: MemoryProvider
+  ): Promise<void> {
+    try {
+      await memoryProvider.init();
+
+      this.logger.info(
+        `memory provider "${memoryProvider.id}" initialized successfully`,
+        {
+          type: "memory.provider.init",
+          memoryProvider: memoryProvider.id
+        }
+      );
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.logger.error(
+        `memory provider "${memoryProvider.id}" initialization failed`,
+        {
+          type: "memory.provider.init.failed",
+          memoryProvider: memoryProvider.id,
+          error: error.message
+        }
+      );
+      throw error;
+    }
+
+    try {
+      await memoryProvider.checkHealth();
+
+      this.logger.info(
+        `memory provider "${memoryProvider.id}" health check passed`,
+        {
+          type: "memory.provider.health.check.passed",
+          memoryProvider: memoryProvider.id
+        }
+      );
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.logger.error(
+        `memory provider "${memoryProvider.id}" health check failed`,
+        {
+          type: "memory.provider.health.check.failed",
+          memoryProvider: memoryProvider.id,
+          error: error.message
+        }
+      );
+
+      throw err;
+    }
+
+    this._memoryProvider = memoryProvider;
+    this.logger.info(
+      `memory provider "${memoryProvider.id}" registered successfully`,
+      {
+        type: "memory.provider.registered",
+        memoryProvider: memoryProvider.id
+      }
+    );
+  }
+
+  public async unregisterMemoryProvider(): Promise<void> {
+    try {
+      await this.memoryProvider.shutdown();
+      this.logger.info(
+        `memory provider "${this.memoryProvider.id}" shutdown successfully`,
+        {
+          type: "memory.provider.shutdown",
+          memoryProvider: this.memoryProvider.id
+        }
+      );
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.logger.error(
+        `memory provider "${this.memoryProvider.id}" shutdown failed`,
+        {
+          type: "memory.provider.shutdown.failed",
+          memoryProvider: this.memoryProvider.id,
+          error: error.message
+        }
+      );
+
+      throw err;
+    }
+
+    this.logger.info(
+      `memory provider "${this.memoryProvider.id}" unregistered successfully`,
+      {
+        type: "memory.provider.unregistered",
+        memoryProvider: this.memoryProvider.id
+      }
+    );
   }
 
   /**
@@ -204,7 +304,7 @@ export class MemoryManager {
       conversationId,
       message
     });
-    return this.provider.storeMessage(message, conversationId);
+    return this.memoryProvider.storeMessage(message, conversationId);
   }
 
   public async storeContext(
@@ -216,7 +316,7 @@ export class MemoryManager {
       conversationId,
       context
     });
-    return this.provider.storeContext(context, conversationId);
+    return this.memoryProvider.storeContext(context, conversationId);
   }
 
   public async getMessages(options: MemoryQueryOptions): Promise<Message[]> {
@@ -224,7 +324,7 @@ export class MemoryManager {
       type: "get_messages.called",
       options
     });
-    return this.provider.getMessages(options);
+    return this.memoryProvider.getMessages(options);
   }
 
   public async getContexts(conversationId: string): Promise<Context[]> {
@@ -232,7 +332,7 @@ export class MemoryManager {
       type: "get_contexts.called",
       conversationId
     });
-    return this.provider.getContexts(conversationId);
+    return this.memoryProvider.getContexts(conversationId);
   }
 
   public async getConversation(conversationId: string): Promise<Conversation> {
@@ -240,7 +340,7 @@ export class MemoryManager {
       type: "get_conversation.called",
       conversationId
     });
-    return this.provider.getConversation(conversationId);
+    return this.memoryProvider.getConversation(conversationId);
   }
 
   public async createConversation(options?: {
@@ -252,7 +352,7 @@ export class MemoryManager {
       type: "create_conversation.called",
       options
     });
-    return this.provider.createConversation(options);
+    return this.memoryProvider.createConversation(options);
   }
 
   public async deleteConversation(conversationId: string): Promise<void> {
@@ -260,7 +360,7 @@ export class MemoryManager {
       type: "delete_conversation.called",
       conversationId
     });
-    return this.provider.deleteConversation(conversationId);
+    return this.memoryProvider.deleteConversation(conversationId);
   }
 
   /**
