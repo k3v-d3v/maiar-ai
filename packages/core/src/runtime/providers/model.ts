@@ -40,12 +40,38 @@ export abstract class ModelProvider {
     return logger.child({ scope: `model.provider.${this.id}` });
   }
 
-  constructor(id: string, name: string, description: string) {
+  constructor({
+    id,
+    name,
+    description
+  }: {
+    id: string;
+    name: string;
+    description: string;
+  }) {
     this.id = id;
     this.name = name;
     this.description = description;
     this.capabilities = new Map<string, ModelCapability>();
   }
+
+  /**
+   * Initializes the model provider. Must be implemented by subclasses.
+   * @returns {Promise<void>} A promise that resolves when initialization is complete.
+   */
+  public abstract init(): Promise<void> | void;
+
+  /**
+   * Checks the health of the model provider. Must be implemented by subclasses.
+   * @returns {Promise<void>} A promise that resolves when health check is complete.
+   */
+  public abstract checkHealth(): Promise<void> | void;
+
+  /**
+   * Shuts down the model provider. Must be implemented by subclasses.
+   * @returns {Promise<void>} A promise that resolves when shutdown is complete.
+   */
+  public abstract shutdown(): Promise<void> | void;
 
   public addCapability(capability: ModelCapability): void {
     this.capabilities.set(capability.id, capability);
@@ -82,8 +108,4 @@ export abstract class ModelProvider {
       ICapabilities[K]["output"]
     >;
   }
-
-  public abstract checkHealth(): Promise<void>;
-
-  public abstract init(): Promise<void>;
 }
