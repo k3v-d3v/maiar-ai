@@ -82,7 +82,8 @@ import "dotenv/config";
 
 import path from "path";
 
-import { createRuntime } from "@maiar-ai/core";
+import { MemoryProvider, ModelProvider, Plugin, Runtime } from "@maiar-ai/core";
+import { stdout } from "@maiar-ai/core/logger";
 
 import { OpenAIProvider } from "@maiar-ai/model-openai";
 
@@ -93,39 +94,58 @@ import { PluginTextGeneration } from "@maiar-ai/plugin-text";
 import { PluginTime } from "@maiar-ai/plugin-time";
 
 // Create and start the agent
-const runtime = createRuntime({
-  models: [
+async function main() {
+  const models: ModelProvider[] = [
     new OpenAIProvider({
       model: "gpt-4",
       apiKey: process.env.OPENAI_API_KEY as string
     })
-  ],
-  memory: new SQLiteProvider({
+  ];
+
+  const memory: MemoryProvider = new SQLiteProvider({
     dbPath: path.join(process.cwd(), "data", "conversations.db")
-  }),
-  plugins: [
+  });
+
+  const plugins: Plugin[] = [
     new PluginTextGeneration(),
     new PluginTime(),
     new PluginTerminal({
       user: "test",
       agentName: "maiar-starter"
     })
-  ]
-});
+  ];
 
-// Start the runtime
-console.log("Starting agent...");
-runtime.start().catch((error) => {
-  console.error("Failed to start agent:", error);
-  process.exit(1);
-});
+  const capabilityAliases: string[][] = [["text-generation", "text-creation"]];
 
-// Handle shutdown gracefully
-process.on("SIGINT", async () => {
-  console.log("Shutting down agent...");
-  await runtime.stop();
-  process.exit(0);
-});
+  const agent = await Runtime.init({
+    models,
+    memory,
+    plugins,
+    capabilityAliases,
+    options: {
+      logger: {
+        level: "debug",
+        transports: [stdout]
+      }
+    }
+  });
+
+  await agent.start();
+}
+
+// Start the runtime if this file is run directly
+if (require.main === module) {
+  (async () => {
+    try {
+      console.log("Starting agent...");
+      await main();
+    } catch (error) {
+      console.error("Failed to start agent");
+      console.error(error);
+      process.exit(1);
+    }
+  })();
+}
 ```
 
 5. Create a `.env` file in your project root:

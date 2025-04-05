@@ -123,7 +123,8 @@ if (require.main === module) {
       console.log("Starting agent...");
       await main();
     } catch (error) {
-      console.error("Failed to start agent:", error);
+      console.error("Failed to start agent");
+      console.error(error);
       process.exit(1);
     }
   })();
