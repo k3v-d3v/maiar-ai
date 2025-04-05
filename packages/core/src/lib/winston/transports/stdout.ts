@@ -4,7 +4,6 @@ const { combine, timestamp, printf, colorize } = format;
 
 const neonGreen = "\x1b[38;2;0;255;0m"; // neon green
 const brightYellow = "\x1b[38;2;255;255;0m"; // bright yellow
-const brightGreen = "\x1b[38;2;0;255;128m"; // bright green
 const brightCyan = "\x1b[38;2;0;255;255m"; // bright cyan
 const lightMagenta = "\x1b[38;2;255;153;255m"; // light magenta
 const white = "\x1b[38;2;255;255;255m"; // white
@@ -28,7 +27,7 @@ export const stdout = new transports.Console({
       format: () => new Date().toISOString()
     }),
     printf(({ level, message, timestamp, scope, ...metadata }) => {
-      const _scope = scope ? color(scope as string, brightGreen) : "unknown";
+      const _scope = scope ? color(scope as string, lightMagenta) : "unknown";
       const meta = metadata
         ? `${Object.entries(metadata)
             .map(([key, value]) => {
@@ -48,7 +47,7 @@ export const stdout = new transports.Console({
         color(timestamp as string, brightYellow),
         level,
         _scope,
-        color(message as string, lightMagenta)
+        color(message as string, neonGreen)
       ];
       if (meta) log.push(meta);
       return log.join(" | ");
