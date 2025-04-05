@@ -113,13 +113,6 @@ async function main() {
     }
   });
 
-  // Handle shutdown gracefully
-  process.on("SIGINT", async () => {
-    console.log("\nReceived SIGINT. Shutting down agent...");
-    await agent.stop();
-    process.exit(0);
-  });
-
   await agent.start();
 }
 
