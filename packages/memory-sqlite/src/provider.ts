@@ -35,14 +35,14 @@ export class SQLiteMemoryProvider extends MemoryProvider {
       description: "Stores conversations in a SQLite database"
     });
     this.config = config;
+    const dbDir = path.dirname(this.config.dbPath);
+    fs.mkdirSync(dbDir, { recursive: true });
     SQLiteDatabase.getInstance().init(this.config);
     this.db = SQLiteDatabase.getInstance().getDatabase();
     this.plugin = new SQLiteMemoryPlugin();
   }
 
   public init(): void {
-    const dbDir = path.dirname(this.config.dbPath);
-    fs.mkdirSync(dbDir, { recursive: true });
     this.initializeStorage();
     this.db.exec("PRAGMA foreign_keys = ON;");
   }
