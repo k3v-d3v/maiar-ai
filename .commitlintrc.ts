@@ -45,6 +45,7 @@ const commitlintConfig: UserConfig = {
         "bounty", // Bounty CI related changes
         "thank-you", // Thank you CI related changes
         "other", // Other changes
+        "cli", // CLI related changes
         "core", // core package
         "memory-filesystem", // memory-filesystem memory provider
         "memory-postgres", // memory-postgres memory provider
